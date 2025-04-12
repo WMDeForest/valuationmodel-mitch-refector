@@ -73,14 +73,14 @@ def calculate_graph(df, discount_rate, selected_songs):
     for selected_song in selected_songs:
         song_data = df[df['Track'] == selected_song].iloc[0]
 
-        value = sp_playlist_reach
+        value = stream_influence_factor
         total_streams_12_months = song_data['total_streams_12_months']
         total_streams_3_months = song_data['total_streams_3_months']
         streams_last_month = song_data['streams_last_month']
         historical = song_data['historical']
         release_date = song_data['release_date']
 
-        updated_fitted_params_df = update_fitted_params(fitted_params_df, sp_playlist_reach, sp_range, SP_REACH)
+        updated_fitted_params_df = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
         # st.write(current_date)
         # st.write(release_date)
         if updated_fitted_params_df is not None:
@@ -695,7 +695,8 @@ with tab1:
         columns_to_drop = ["Release date", "Spotify Streams 1m", "Spotify Streams 3m", "Spotify Streams 12m", "Spotify Streams Total"]
         df.drop(columns=columns_to_drop, inplace=True)
 
-        sp_playlist_reach = 1000
+        # Stream influence factor (formerly called sp_playlist_reach)
+        stream_influence_factor = 1000
         forecast_periods = 400
         current_date = datetime.today()
 
@@ -994,7 +995,8 @@ with tab2:
         columns_to_drop = ["Release date", "Spotify Streams 1m", "Spotify Streams 3m", "Spotify Streams 12m", "Spotify Streams Total"]
         df.drop(columns=columns_to_drop, inplace=True)
 
-        sp_playlist_reach = 1000
+        # Stream influence factor (formerly called sp_playlist_reach)
+        stream_influence_factor = 1000
         forecast_periods = 400
         current_date = datetime.today()
 
@@ -1046,14 +1048,14 @@ with tab2:
             for selected_song in selected_songs:
                 song_data = df[df['Track'] == selected_song].iloc[0]
 
-                value = sp_playlist_reach
+                value = stream_influence_factor
                 total_streams_12_months = song_data['total_streams_12_months']
                 total_streams_3_months = song_data['total_streams_3_months']
                 streams_last_month = song_data['streams_last_month']
                 historical = song_data['historical']
                 release_date = song_data['release_date']
 
-                updated_fitted_params_df = update_fitted_params(fitted_params_df, sp_playlist_reach, sp_range, SP_REACH)
+                updated_fitted_params_df = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
                 #st.write(current_date)
                 #st.write(release_date)
                 if updated_fitted_params_df is not None:
@@ -1745,11 +1747,12 @@ with tab3:
                 }).reset_index()
 
                 # Generate forecasts using training data
-                sp_playlist_reach = 1000  # Default value as in tab2
+                # Stream influence factor (formerly called sp_playlist_reach)
+                stream_influence_factor = 1000  # Default value as in tab2
                 current_date = training_df['Date'].max()
                 
                 # Update fitted parameters based on playlist reach
-                updated_fitted_params_df = update_fitted_params(fitted_params_df, sp_playlist_reach, sp_range, SP_REACH)
+                updated_fitted_params_df = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
                 
                 # Calculate months since release for forecasting
                 months_since_release_total = (current_date - release_date).days // 30
