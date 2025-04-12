@@ -1,23 +1,23 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[7]:
-
-import time
-import streamlit as st
+import os
 import pandas as pd
 import numpy as np
-from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
-import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-import requests
+import time
+import json
+import streamlit as st
+import re
 import base64
+from datetime import datetime, timedelta
+from scipy.optimize import curve_fit
 from io import StringIO
 from sklearn.metrics import r2_score
+import requests
 
-from services.chartmetric_services.chartmetric import ChartMetricService
+# Replace the direct import with the initialized service
+from services.chartmetric_services import chartmetric_service as chartmetric
 from services.chartmetric_services.http_client import RequestsHTTPClient
 
 # Add this function near the top of the file, after all imports
@@ -80,11 +80,6 @@ def country_code_to_name(code):
 # Define file paths for local CSV files
 FILE_PATH_MECH = "MECHv2.csv"
 FILE_PATH_RATES = "worldwide_rates_final.csv"
-
-chartmetric = ChartMetricService(
-    refresh_token=st.secrets['CM_TOKEN'],
-    client=RequestsHTTPClient()
-)
 
 # Simple function to load local CSV files
 def load_local_csv(file_path):
