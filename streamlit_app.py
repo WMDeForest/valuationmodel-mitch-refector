@@ -719,7 +719,6 @@ def component_handler(df):
                 selected_songs=st.session_state.selected_songs,
             )
 
-
 with tab1:
     st.title("Artist and Track ID Form")
     
@@ -739,12 +738,33 @@ with tab1:
         st.session_state.mldr = None
     if 'track_summary_list' not in st.session_state:
         st.session_state.track_summary_list = []
+    
+    # Function to load test data
+    def load_test_data():
+        st.session_state['artist_id'] = "4276517"  # Thymes
+        st.session_state['track_id'] = "60300793"  # Free as a bird
+        
+    # Initialize session state for input fields if not already done
+    if 'artist_id' not in st.session_state:
+        st.session_state['artist_id'] = ""
+    if 'track_id' not in st.session_state:
+        st.session_state['track_id'] = ""
         
     with st.form(key="artist_track_form"):
         st.subheader("Enter Details")
-        artist_id = st.text_input("Artist ID", placeholder="Enter Artist ID")
-        track_ids_input = st.text_input("Track ID", placeholder="Enter Track ID")
-        submit_button = st.form_submit_button("Submit")
+        artist_id = st.text_input("Artist ID", placeholder="Enter Artist ID", value=st.session_state['artist_id'], key="artist_id_input")
+        track_ids_input = st.text_input("Track ID", placeholder="Enter Track ID", value=st.session_state['track_id'], key="track_id_input")
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            submit_button = st.form_submit_button("Submit")
+        with col2:
+            load_test_button = st.form_submit_button("Load Test Data", help="Load test data with Artist ID: Thymes (4276517) and Track ID: Free as a bird (60300793)")
+            
+    # Handle the load test button click
+    if load_test_button:
+        load_test_data()
+        st.rerun()  # Rerun the app to reflect the changes in the form fields
 
     if submit_button:
         start_time = time.time()
