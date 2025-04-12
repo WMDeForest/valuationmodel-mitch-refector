@@ -286,7 +286,7 @@ def calculate_decay_rate(monthly_data):
     return decay_rate, popt  # Ensure both decay_rate and popt are returned
 
 
-st.title('Song Valuation App')
+st.title('mitch_refactor_valuation_app')
 
 # Load the mechanical royalties data from local file
 df_additional = load_local_csv(FILE_PATH_MECH)
