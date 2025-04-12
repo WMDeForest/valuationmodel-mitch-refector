@@ -1,3 +1,22 @@
+"""
+Population Data Utility Module
+-----------------------------
+
+This module provides access to global population data for countries around the world.
+The data is used for population-based metrics and normalizing audience data relative 
+to country population sizes in the valuation model.
+
+The module contains:
+- Raw country name list (countries_raw)
+- Corresponding population values (populations_raw)
+- Function to get this data as a formatted DataFrame
+
+Usage:
+    from utils.population_data import get_population_data
+    
+    population_df = get_population_data()
+"""
+
 import pandas as pd
 
 countries_raw = ["Tuvalu", "Nauru", "Palau", "British Virgin Islands", "Saint Martin", "Gibraltar", "San Marino", "Monaco", "Liechtenstein", "Sint Maarten", "Marshall Islands", "American Samoa", "Turks and Caicos Islands", "Saint Kitts and Nevis", "Northern Mariana Islands", "Faroe Islands", "Greenland", "Bermuda", "Cayman Islands", "Dominica", "Andorra", "Isle of Man", "Antigua and Barbuda", "Saint Vincent and the Grenadines", "United States Virgin Islands", "Aruba", "Tonga", "Micronesia", "Seychelles", "Grenada", "Kiribati", "Curaçao", "Guam", "Saint Lucia", "Samoa", "Sao Tome and Principe", "New Caledonia", "Barbados", "French Polynesia", "Vanuatu", "Iceland", "Belize", "Bahamas", "Brunei Darussalam", "Maldives", "Malta", "Cabo Verde", "Montenegro", "Suriname", "Luxembourg", "Macao", "Solomon Islands", "Bhutan", "Guyana", "Comoros", "Fiji", "Djibouti", "Cyprus", "Mauritius", "Timor-Leste", "Estonia", "Bahrain", "Trinidad and Tobago", "Equatorial Guinea", "Kosovo", "North Macedonia", "Latvia", "Slovenia", "Guinea-Bissau", "Lesotho", "Gabon", "Moldova", "Namibia", "Botswana", "Qatar", "Albania", "Gambia", "Armenia", "Jamaica", "Lithuania", "Puerto Rico", "Bosnia and Herzegovina", "Uruguay", "Mongolia", "Eritrea", "Georgia", "Croatia", "Kuwait", "Panama", "Oman", "Mauritania", "Palestine", "Costa Rica", "New Zealand", "Ireland", "Lebanon", "Liberia", "Slovakia", "Norway", "Finland", "Central African Republic", "Singapore", "Denmark", "Congo (Republic)", "El Salvador", "Bulgaria", "Turkmenistan", "Serbia", "Paraguay", "Libya", "Nicaragua", "Kyrgyz Republic", "Hong Kong", "Lao People's Democratic Republic", "Sierra Leone", "Switzerland", "Togo", "Austria", "Belarus", "United Arab Emirates", "Hungary", "Israel", "Azerbaijan", "Tajikistan", "Papua New Guinea", "Greece", "Portugal", "Sweden", "Honduras", "Czech Republic", "South Sudan", "Cuba", "Dominican Republic", "Jordan", "Haiti", "Belgium", "Bolivia", "Tunisia", "Burundi", "Benin", "Rwanda", "Guinea", "Zimbabwe", "Cambodia", "Guatemala", "Senegal", "Netherlands", "Somalia", "Ecuador", "Chad", "Romania", "Chile", "Kazakhstan", "Zambia", "Malawi", "Sri Lanka", "Taiwan", "Syrian Arab Republic", "Burkina Faso", "Mali", "North Korea", "Australia", "Niger", "Cameroon", "Venezuela", "Cote d'Ivoire", "Madagascar", "Nepal", "Mozambique", "Ghana", "Malaysia", "Peru", "Yemen", "Uzbekistan", "Angola", "Poland", "Saudi Arabia", "Ukraine", "Morocco", "Canada", "Afghanistan", "Iraq", "Algeria", "Argentina", "Sudan", "Spain", "Uganda", "South Korea", "Colombia", "Myanmar", "Kenya", "Italy", "South Africa", "Tanzania", "France", "United Kingdom", "Thailand", "Germany", "Turkey", "Iran", "Vietnam", "Congo (Democratic)", "Egypt", "Philippines", "Japan", "Ethiopia", "Mexico", "Russian Federation", "Bangladesh", "Brazil", "Nigeria", "Pakistan", "Indonesia", "United States", "China", "India", "Swaziland", "Anguilla", "Antarctica", "Bonaire, Sint Eustatius and Saba", "Bouvet Island", "British Indian Ocean Territory", "Christmas Island", "Cocos Islands", "Cook Islands", "Falkland Islands (Malvinas)", "French Guiana", "French Southern Territories", "Guadeloupe", "Guernsey", "Heard Island and McDonald Islands", "Jersey", "Martinique", "Mayotte", "Montserrat", "Netherlands Antilles", "Niue", "Norfolk Island", "Pitcairn Islands", "Réunion", "Saint Barthélemy", "Saint Helena, Ascension and Tristan da Cunha", "Saint Pierre and Miquelon", "South Georgia and the South Sandwich Islands", "Svalbard & Jan Mayen Islands", "Tokelau", "United States Minor Outlying Islands", "Vatican City", "Wallis and Futuna", "Western Sahara", "Åland Islands"]
