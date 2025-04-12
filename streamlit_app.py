@@ -45,22 +45,29 @@ from utils.decay_models import (
     forecast_values,
 )
 
+# ===== DATA LOADING - GLOBAL DATASETS =====
+# Load country population data for analyzing geographic streaming patterns
+# and detecting potential anomalies (e.g., streams exceeding realistic population penetration)
 population_df = get_population_data()
 
-st.title('mitch_refactor_valuation_app')
-
-# Load the mechanical royalties data from utils module
+# Load mechanical royalties data - contains historical royalty rates for Spotify streams
+# Used to calculate historical value and forecast financial projections
 df_additional = get_mech_data()
 if df_additional is None:
     st.error("Failed to load mechanical royalties data")
     st.stop()
 
-# Load the worldwide rates data from utils module
+# Load worldwide rates data - contains country-specific royalty rates
+# Used to calculate revenue projections based on geographic streaming distribution
 GLOBAL = get_rates_data()
 if GLOBAL is None:
     st.error("Failed to load worldwide rates data")
     st.stop()
 
+# ===== APP INTERFACE SETUP =====
+st.title('mitch_refactor_valuation_app')
+
+# Create main navigation tabs
 tab1, tab2, tab3 = st.tabs(["API Search", "File Uploader", "Backtest"])
 
 def calculate_graph(df, discount_rate, selected_songs):
