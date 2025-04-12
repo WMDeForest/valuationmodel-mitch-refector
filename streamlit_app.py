@@ -24,160 +24,28 @@ from services.chartmetric_services.http_client import RequestsHTTPClient
 from utils.data_loader import get_mech_data, get_rates_data, load_local_csv
 from utils.population_utils.population_data import get_population_data
 from utils.population_utils.country_code_to_name import country_code_to_name
+from utils.decay_rates import (
+    ranges_sp,
+    sp_range,
+    SP_REACH_DATA,
+    SP_REACH,
+    fitted_params,
+    fitted_params_df,
+    breakpoints,
+)
+
+# Import decay model functions from the new modules
+from utils.decay_models import (
+    piecewise_exp_decay,
+    exponential_decay,
+    remove_anomalies,
+    calculate_decay_rate,
+    fit_segment,
+    update_fitted_params,
+    forecast_values,
+)
 
 population_df = get_population_data()
-
-ranges_sp = {
-    'Column 1': list(range(1, 11)),
-    'RangeStart': [0, 10000, 30000, 50000, 75000, 110000, 160000, 250000, 410000, 950000],
-    'RangeEnd': [10000, 30000, 50000, 75000, 110000, 160000, 250000, 410000, 950000, 1E18]
-}
-sp_range = pd.DataFrame(ranges_sp)
-
-SP_REACH_DATA = {
-    'Unnamed: 0': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    1: [0.094000, 0.064033, 0.060000, 0.050000, 0.035000, 0.030000, 0.030000, 0.030000, 0.030000, 0.015000, 0.015000, 0.020000],
-    2: [0.089111, 0.061430, 0.055739, 0.044959, 0.031111, 0.026667, 0.026667, 0.026877, 0.026667, 0.013990, 0.013333, 0.020000],
-    3: [0.084222, 0.058826, 0.051478, 0.039918, 0.027222, 0.023333, 0.023333, 0.023754, 0.023333, 0.012980, 0.011667, 0.020000],
-    4: [0.079333, 0.056222, 0.047218, 0.034877, 0.023333, 0.020000, 0.020000, 0.020631, 0.020000, 0.011971, 0.010000, 0.020000],
-    5: [0.074444, 0.053619, 0.042957, 0.029836, 0.019444, 0.016667, 0.016667, 0.017508, 0.016667, 0.010961, 0.008333, 0.020000],
-    6: [0.069556, 0.051015, 0.038696, 0.024795, 0.015556, 0.013333, 0.013333, 0.014385, 0.013333, 0.009951, 0.006667, 0.020000],
-    7: [0.064667, 0.048411, 0.034435, 0.019754, 0.011667, 0.010000, 0.010000, 0.011262, 0.010000, 0.008941, 0.005000, 0.020000],
-    8: [0.059778, 0.045808, 0.030174, 0.014713, 0.007778, 0.006667, 0.006667, 0.008138, 0.006667, 0.007931, 0.003333, 0.020000],
-    9: [0.054889, 0.043204, 0.025913, 0.009672, 0.003889, 0.003333, 0.003333, 0.005015, 0.003333, 0.006921, 0.001667, 0.020000],
-    10: [0.050000, 0.040600, 0.021653, 0.004631, 0.010000, 0.010000, 0.010000, 0.001892, 0.010000, 0.005912, 0.010000, 0.020000]
-}
-
-# Create the DataFrame
-SP_REACH = pd.DataFrame(SP_REACH_DATA)
-
-fitted_params = [
-    {'segment': 1, 'S0': 7239.425562317985, 'k': 0.06741191851584262},
-    {'segment': 2, 'S0': 6465.440296195081, 'k': 0.03291507714354558},
-    {'segment': 3, 'S0': 6478.639247351713, 'k': 0.03334620907608441},
-    {'segment': 4, 'S0': 5755.53795902042, 'k': 0.021404012549575913},
-    {'segment': 5, 'S0': 6023.220319977014, 'k': 0.02461834982301452},
-    {'segment': 6, 'S0': 6712.835052107982, 'k': 0.03183160108111365},
-    {'segment': 7, 'S0': 6371.457552382675, 'k': 0.029059156192761115},
-    {'segment': 8, 'S0': 5954.231622567404, 'k': 0.02577913683190864},
-    {'segment': 9, 'S0': 4932.65240022657, 'k': 0.017941231431835854},
-    {'segment': 10, 'S0': 3936.0657447490344, 'k': 0.009790878919164516},
-    {'segment': 11, 'S0': 4947.555706076349, 'k': 0.016324033736761206},
-    {'segment': 12, 'S0': 4000, 'k': 0.0092302}
-]
-
-
-fitted_params_df = pd.DataFrame(fitted_params)
-
-# Define breakpoints for segments
-breakpoints = [1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 36, 48, 100000]
-
-# Define the piecewise exponential decay function
-def piecewise_exp_decay(x, S0, k):
-    return S0 * np.exp(-k * x)
-
-# Function to fit model to a segment of data
-def fit_segment(months_since_release, streams):
-    initial_guess = [streams[0], 0.01]  
-    bounds = ([0, 0], [np.inf, np.inf])  
-    
-    params, covariance = curve_fit(piecewise_exp_decay, months_since_release, streams, p0=initial_guess, bounds=bounds)
-    
-    return params
-
-# Update fitted parameters based on Spotify Playlist Reach
-def update_fitted_params(fitted_params_df, value, sp_range, SP_REACH):
-    updated_fitted_params_df = fitted_params_df.copy()
-    
-    segment = sp_range.loc[(sp_range['RangeStart'] <= value) & (sp_range['RangeEnd'] > value), 'Column 1'].iloc[0]
-    
-    if segment not in SP_REACH.columns:
-        st.error(f"Error: Column '{segment}' not found in SP_REACH.")
-        st.write("Available columns:", SP_REACH.columns)
-        return None
-    
-    column_to_append = SP_REACH[segment]
-    updated_fitted_params_df['k'] = updated_fitted_params_df['k'] * 0.67 + column_to_append * 0.33
-
-    return updated_fitted_params_df
-
-# Function to forecast values
-def forecast_values(consolidated_df, initial_value, start_period, forecast_periods):
-    params = consolidated_df.to_dict(orient='records')
-    forecasts = []
-    current_value = initial_value
-    
-    for i in range(forecast_periods):
-        current_segment = 0
-        current_month = start_period + i
-        
-        while current_month >= sum(len(range(breakpoints[j] + 1, breakpoints[j + 1] + 1)) for j in range(current_segment + 1)):
-            current_segment += 1
-        
-        current_segment_params = params[current_segment]
-        S0 = current_value
-        k = current_segment_params['k']
-        
-        forecast_value = S0 * np.exp(-k * (1))
-        
-        forecasts.append({
-            'month': current_month,
-            'forecasted_value': forecast_value,
-            'segment_used': current_segment + 1,
-            'time_used': current_month - start_period + 1
-        })
-        
-        current_value = forecast_value
-    
-    return forecasts
-
-
-def exponential_decay(x, a, b):
-    return a * np.exp(-b * x)
-
-def remove_anomalies(data):
-    # Calculate the 4-week moving average
-    data['4_Week_MA'] = data['Streams'].rolling(window=4, min_periods=1).mean()
-
-    # Resample the data to monthly sums
-    data.set_index('Date', inplace=True)
-    monthly_data = data['4_Week_MA'].resample('M').sum().reset_index()
-
-    # Detect anomalies using the IQR method
-    Q1 = monthly_data['4_Week_MA'].quantile(0.25)
-    Q3 = monthly_data['4_Week_MA'].quantile(0.75)
-    IQR = Q3 - Q1
-
-    # Define bounds for anomaly detection
-    lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-
-    # Detect anomalies
-    monthly_data['is_anomaly'] = (monthly_data['4_Week_MA'] < lower_bound) | (monthly_data['4_Week_MA'] > upper_bound)
-
-    # Interpolate anomalies
-    for i in range(1, len(monthly_data) - 1):
-        if monthly_data.loc[i, 'is_anomaly']:
-            monthly_data.loc[i, '4_Week_MA'] = (monthly_data.loc[i - 1, '4_Week_MA'] + monthly_data.loc[i + 1, '4_Week_MA']) / 2
-
-    return monthly_data
-
-def calculate_decay_rate(monthly_data):
-    # Calculate the number of months since the first date in the filtered data
-    min_date = monthly_data['Date'].min()
-    monthly_data['Months'] = monthly_data['Date'].apply(lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month)
-
-    # Fit the exponential decay model to the monthly data
-    x_data = monthly_data['Months']
-    y_data = monthly_data['4_Week_MA']
-
-    # Use initial guesses for curve fitting
-    popt, _ = curve_fit(exponential_decay, x_data, y_data, p0=(max(y_data), 0.1))
-
-    # Extract the decay rate (b)
-    decay_rate = popt[1]
-    return decay_rate, popt  # Ensure both decay_rate and popt are returned
-
 
 st.title('mitch_refactor_valuation_app')
 
@@ -2158,3 +2026,4 @@ with tab3:
                     ]
                 })
                 st.write(overall_summary)
+
