@@ -1,3 +1,23 @@
+"""
+Data Loader Utility Module
+--------------------------
+
+This module provides functions for loading and accessing various data sources used
+in the valuation model application. It handles CSV file loading with proper error handling
+and provides clean access to common data sources.
+
+Key functions:
+- load_local_csv: Generic CSV loader with error handling
+- get_mech_data: Loads mechanical royalty data
+- get_rates_data: Loads worldwide rates data
+
+Usage:
+    from utils.data_loader import get_mech_data, get_rates_data
+    
+    mech_data = get_mech_data()
+    rates_data = get_rates_data()
+"""
+
 import pandas as pd
 import streamlit as st
 import os
