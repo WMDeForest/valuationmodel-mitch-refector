@@ -1,9 +1,10 @@
 import pandas as pd
 import streamlit as st
+import os
 
 # Define file paths for local CSV files
-FILE_PATH_MECH = "MECHv2.csv"
-FILE_PATH_RATES = "worldwide_rates_final.csv"
+FILE_PATH_MECH = os.path.join("data", "MECHv2.csv")
+FILE_PATH_RATES = os.path.join("data", "worldwide_rates_final.csv")
 
 def load_local_csv(file_path):
     """
