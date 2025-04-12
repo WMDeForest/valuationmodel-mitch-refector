@@ -77,17 +77,8 @@ def country_code_to_name(code):
     }
     return country_map.get(code, code)  # Return original code if no mapping exists
 
-# Define file paths for local CSV files
-FILE_PATH_MECH = "MECHv2.csv"
-FILE_PATH_RATES = "worldwide_rates_final.csv"
-
-# Simple function to load local CSV files
-def load_local_csv(file_path):
-    try:
-        return pd.read_csv(file_path)
-    except Exception as e:
-        st.error(f"Failed to load local file {file_path}: {e}")
-        return None
+# Import data loading functions from utils module
+from utils.data_loader import get_mech_data, get_rates_data, load_local_csv
 
 countries_raw = ["Tuvalu", "Nauru", "Palau", "British Virgin Islands", "Saint Martin", "Gibraltar", "San Marino", "Monaco", "Liechtenstein", "Sint Maarten", "Marshall Islands", "American Samoa", "Turks and Caicos Islands", "Saint Kitts and Nevis", "Northern Mariana Islands", "Faroe Islands", "Greenland", "Bermuda", "Cayman Islands", "Dominica", "Andorra", "Isle of Man", "Antigua and Barbuda", "Saint Vincent and the Grenadines", "United States Virgin Islands", "Aruba", "Tonga", "Micronesia", "Seychelles", "Grenada", "Kiribati", "Curaçao", "Guam", "Saint Lucia", "Samoa", "Sao Tome and Principe", "New Caledonia", "Barbados", "French Polynesia", "Vanuatu", "Iceland", "Belize", "Bahamas", "Brunei Darussalam", "Maldives", "Malta", "Cabo Verde", "Montenegro", "Suriname", "Luxembourg", "Macao", "Solomon Islands", "Bhutan", "Guyana", "Comoros", "Fiji", "Djibouti", "Cyprus", "Mauritius", "Timor-Leste", "Estonia", "Bahrain", "Trinidad and Tobago", "Equatorial Guinea", "Kosovo", "North Macedonia", "Latvia", "Slovenia", "Guinea-Bissau", "Lesotho", "Gabon", "Moldova", "Namibia", "Botswana", "Qatar", "Albania", "Gambia", "Armenia", "Jamaica", "Lithuania", "Puerto Rico", "Bosnia and Herzegovina", "Uruguay", "Mongolia", "Eritrea", "Georgia", "Croatia", "Kuwait", "Panama", "Oman", "Mauritania", "Palestine", "Costa Rica", "New Zealand", "Ireland", "Lebanon", "Liberia", "Slovakia", "Norway", "Finland", "Central African Republic", "Singapore", "Denmark", "Congo (Republic)", "El Salvador", "Bulgaria", "Turkmenistan", "Serbia", "Paraguay", "Libya", "Nicaragua", "Kyrgyz Republic", "Hong Kong", "Lao People's Democratic Republic", "Sierra Leone", "Switzerland", "Togo", "Austria", "Belarus", "United Arab Emirates", "Hungary", "Israel", "Azerbaijan", "Tajikistan", "Papua New Guinea", "Greece", "Portugal", "Sweden", "Honduras", "Czech Republic", "South Sudan", "Cuba", "Dominican Republic", "Jordan", "Haiti", "Belgium", "Bolivia", "Tunisia", "Burundi", "Benin", "Rwanda", "Guinea", "Zimbabwe", "Cambodia", "Guatemala", "Senegal", "Netherlands", "Somalia", "Ecuador", "Chad", "Romania", "Chile", "Kazakhstan", "Zambia", "Malawi", "Sri Lanka", "Taiwan", "Syrian Arab Republic", "Burkina Faso", "Mali", "North Korea", "Australia", "Niger", "Cameroon", "Venezuela", "Cote d'Ivoire", "Madagascar", "Nepal", "Mozambique", "Ghana", "Malaysia", "Peru", "Yemen", "Uzbekistan", "Angola", "Poland", "Saudi Arabia", "Ukraine", "Morocco", "Canada", "Afghanistan", "Iraq", "Algeria", "Argentina", "Sudan", "Spain", "Uganda", "South Korea", "Colombia", "Myanmar", "Kenya", "Italy", "South Africa", "Tanzania", "France", "United Kingdom", "Thailand", "Germany", "Turkey", "Iran", "Vietnam", "Congo (Democratic)", "Egypt", "Philippines", "Japan", "Ethiopia", "Mexico", "Russian Federation", "Bangladesh", "Brazil", "Nigeria", "Pakistan", "Indonesia", "United States", "China", "India", "Swaziland", "Anguilla", "Antarctica", "Bonaire, Sint Eustatius and Saba", "Bouvet Island", "British Indian Ocean Territory", "Christmas Island", "Cocos Islands", "Cook Islands", "Falkland Islands (Malvinas)", "French Guiana", "French Southern Territories", "Guadeloupe", "Guernsey", "Heard Island and McDonald Islands", "Jersey", "Martinique", "Mayotte", "Montserrat", "Netherlands Antilles", "Niue", "Norfolk Island", "Pitcairn Islands", "Réunion", "Saint Barthélemy", "Saint Helena, Ascension and Tristan da Cunha", "Saint Pierre and Miquelon", "South Georgia and the South Sandwich Islands", "Svalbard & Jan Mayen Islands", "Tokelau", "United States Minor Outlying Islands", "Vatican City", "Wallis and Futuna", "Western Sahara", "Åland Islands"]
 
@@ -283,16 +274,16 @@ def calculate_decay_rate(monthly_data):
 
 st.title('mitch_refactor_valuation_app')
 
-# Load the mechanical royalties data from local file
-df_additional = load_local_csv(FILE_PATH_MECH)
+# Load the mechanical royalties data from utils module
+df_additional = get_mech_data()
 if df_additional is None:
-    st.error("Failed to load mechanical royalties data from local file")
+    st.error("Failed to load mechanical royalties data")
     st.stop()
 
-# Load the worldwide rates data from local file
-GLOBAL = load_local_csv(FILE_PATH_RATES)
+# Load the worldwide rates data from utils module
+GLOBAL = get_rates_data()
 if GLOBAL is None:
-    st.error("Failed to load worldwide rates data from local file")
+    st.error("Failed to load worldwide rates data")
     st.stop()
 
 tab1, tab2, tab3 = st.tabs(["API Search", "File Uploader", "Backtest"])
