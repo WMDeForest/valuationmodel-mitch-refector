@@ -26,7 +26,6 @@ from utils.population_utils.population_data import get_population_data
 from utils.population_utils.country_code_to_name import country_code_to_name
 from utils.data_processing import (
     convert_to_datetime, 
-    format_date,
     sample_data,
     select_columns,
     rename_columns,
@@ -107,19 +106,8 @@ with tab1:
         # Sample weekly data by keeping every 7th row
         df = sample_data(df)
         
-        # Format date to DD/MM/YYYY
-        df = format_date(df, 'Date')
-        
         # 3. DATA VALIDATION AND PROCESSING
         if validate_columns(df, ['Date', 'Monthly Listeners']):
-            # Convert dates again after formatting (ensuring proper datetime objects)
-            df, date_issues = convert_to_datetime(df, 'Date', dayfirst=True)
-            
-            # Display any new issues after second conversion
-            for issue in date_issues:
-                if "Failed to convert" in issue:
-                    st.error(issue)
-                    
             # Sort data chronologically
             df = df.sort_values(by='Date')
 

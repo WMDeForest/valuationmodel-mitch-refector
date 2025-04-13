@@ -31,21 +31,6 @@ def convert_to_datetime(df, column_name, dayfirst=True):
     
     return df, issues
 
-def format_date(df, column_name, format_str='%d/%m/%Y'):
-    """
-    Format a datetime column to a specific string format.
-    
-    Args:
-        df: DataFrame containing the datetime column
-        column_name: Name of the column to format
-        format_str: Format string for the date
-        
-    Returns:
-        DataFrame with formatted date column
-    """
-    df[column_name] = df[column_name].dt.strftime(format_str)
-    return df
-
 def sample_data(df, sample_rate=7):
     """
     Sample data by keeping every nth row.
