@@ -25,14 +25,14 @@ def remove_anomalies(data):
     - IQR is Q3 - Q1
 
     Args:
-        data: DataFrame with 'Date' and 'Streams' columns
+        data: DataFrame with 'Date' and 'Monthly Listeners' columns
                 Date column must be datetime format
-                Streams column contains the raw streaming counts
+                Monthly Listeners column contains the raw streaming counts
         
     Returns:
         DataFrame with following columns:
         - 'Date': Original date (now index)
-        - '4_Week_MA': 4-week moving average of streams
+        - '4_Week_MA': 4-week moving average of monthly listeners
         - 'is_anomaly': Boolean flag indicating detected anomalies
         
     Notes:
@@ -41,7 +41,7 @@ def remove_anomalies(data):
         would otherwise significantly distort the decay curve fitting.
     """
     # Calculate the 4-week moving average
-    data['4_Week_MA'] = data['Streams'].rolling(window=4, min_periods=1).mean()
+    data['4_Week_MA'] = data['Monthly Listeners'].rolling(window=4, min_periods=1).mean()
 
     # Resample the data to monthly sums
     data.set_index('Date', inplace=True)

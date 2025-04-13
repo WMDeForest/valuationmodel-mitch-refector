@@ -100,10 +100,9 @@ with tab1:
                 else:
                     st.warning(f"{issue} Please check your data.")
         
-        # Keep only required columns and rename for clarity
-        column_map = {'Date': 'Date', 'Monthly Listeners': 'Streams'}
-        df = select_columns(df, list(column_map.keys()))
-        df = rename_columns(df, column_map)
+        # Keep only required columns
+        columns_to_keep = ['Date', 'Monthly Listeners']
+        df = select_columns(df, columns_to_keep)
         
         # Sample weekly data by keeping every 7th row
         df = sample_data(df)
@@ -112,7 +111,7 @@ with tab1:
         df = format_date(df, 'Date')
         
         # 3. DATA VALIDATION AND PROCESSING
-        if validate_columns(df, ['Date', 'Streams']):
+        if validate_columns(df, ['Date', 'Monthly Listeners']):
             # Convert dates again after formatting (ensuring proper datetime objects)
             df, date_issues = convert_to_datetime(df, 'Date', dayfirst=True)
             
@@ -174,7 +173,7 @@ with tab1:
                 
                 # Plot formatting and styling
                 ax.set_xlabel('Date', fontsize=12)
-                ax.set_ylabel('Streams', fontsize=12)
+                ax.set_ylabel('Monthly Listeners', fontsize=12)
                 ax.set_title(f'Moving Average and Exponential Decay', fontsize=14, weight='bold')
                 ax.legend()
                 ax.set_ylim(bottom=0)
@@ -189,7 +188,7 @@ with tab1:
                 # Display the plot
                 st.pyplot(fig)
         else:
-            st.error("The uploaded file does not contain the required columns 'Date' and 'Streams'.")
+            st.error("The uploaded file does not contain the required columns 'Date' and 'Monthly Listeners'.")
             
     # ===== TRACK DATA MANAGEMENT =====
     # 1. FILE UPLOADS FOR ADDITIONAL DATA
