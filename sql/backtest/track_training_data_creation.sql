@@ -59,7 +59,18 @@ WHERE
 -- =========================================================================
 -- RESULTS SUMMARY
 -- =========================================================================
--- After applying the data validation criteria, the final training dataset
--- contains 9,974 unique tracks, down from 24,188 in the source data.
+-- Initial filtering:
+-- After applying the data validation criteria, the initial training dataset
+-- contained 9,974 unique tracks, down from 24,188 in the source data.
 -- This reduction occurred due to eliminating tracks without sufficient
--- training data (90+ days) or validation data (730+ days). 
+-- training data (90+ days) or validation data (730+ days).
+--
+-- Orphaned track cleanup:
+-- Additional cleanup was performed to remove orphaned tracks that didn't have
+-- corresponding artist data in the artist training dataset. This ensures
+-- that when running forecasting models, we have both artist and track data
+-- available for all entities.
+--
+-- Final dataset:
+-- 8,318 unique tracks across 1,565 unique artists
+-- This represents a further reduction of 1,656 tracks from the initial filtered set. 
