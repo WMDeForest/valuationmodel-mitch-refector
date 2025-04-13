@@ -27,7 +27,7 @@ maintenance, and future enhancements to the valuation model.
 
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
 from utils.decay_models.preprocessing import remove_anomalies
-from utils.decay_models.fitting import calculate_decay_rate, fit_segment
+from utils.decay_models.fitting import calculate_decay_rate, fit_segment, calculate_monthly_listener_decay
 from utils.decay_models.parameter_updates import update_fitted_params
 from utils.decay_models.forecasting import forecast_values
 
@@ -37,6 +37,7 @@ __all__ = [
     'exponential_decay',
     'remove_anomalies',
     'calculate_decay_rate',
+    'calculate_monthly_listener_decay',
     'fit_segment',
     'update_fitted_params',
     'forecast_values',

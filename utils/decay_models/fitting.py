@@ -8,6 +8,7 @@ and the forecasting process, extracting the key parameters that drive prediction
 import numpy as np
 from scipy.optimize import curve_fit
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
+from utils.decay_models.preprocessing import remove_anomalies
 
 def fit_segment(months_since_release, streams):
     """
@@ -90,3 +91,56 @@ def calculate_decay_rate(monthly_data):
     # Extract the decay rate (b) - this is the MLDR (Music Listener Decay Rate)
     decay_rate = popt[1]
     return decay_rate, popt 
+
+def calculate_monthly_listener_decay(df_monthly_listeners, start_date=None, end_date=None):
+    """
+    Calculate the decay rate of monthly listeners from any data source.
+    
+    Parameters:
+    -----------
+    df_monthly_listeners : DataFrame
+        Must contain 'Date' and 'Monthly Listeners' columns
+    start_date, end_date : datetime, optional
+        Date range to analyze
+        
+    Returns:
+    --------
+    dict:
+        mldr: Monthly listener decay rate
+        popt: Fitted parameters
+        subset_df: Filtered DataFrame with calculated columns
+        min_date: Minimum date in the dataset
+        max_date: Maximum date in the dataset
+    """
+    # Ensure data is sorted
+    df = df_monthly_listeners.sort_values(by='Date')
+    
+    # Process anomalies
+    monthly_data = remove_anomalies(df)
+    
+    # Get min/max dates
+    min_date = monthly_data['Date'].min().to_pydatetime()
+    max_date = monthly_data['Date'].max().to_pydatetime()
+    
+    # Filter by date if specified
+    if start_date and end_date:
+        mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
+        subset_df = monthly_data[mask]
+    else:
+        subset_df = monthly_data
+    
+    # Calculate months since first date
+    subset_df['Months'] = subset_df['Date'].apply(
+        lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
+    )
+    
+    # Calculate decay rate
+    mldr, popt = calculate_decay_rate(subset_df)
+    
+    return {
+        'mldr': mldr, 
+        'popt': popt,
+        'subset_df': subset_df,
+        'min_date': min_date,
+        'max_date': max_date
+    } 
