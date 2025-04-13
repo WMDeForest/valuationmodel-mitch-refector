@@ -31,21 +31,6 @@ def convert_to_datetime(df, column_name, dayfirst=True):
     
     return df, issues
 
-def format_date(df, column_name, format_str='%d/%m/%Y'):
-    """
-    Format a datetime column to a specific string format.
-    
-    Args:
-        df: DataFrame containing the datetime column
-        column_name: Name of the column to format
-        format_str: Format string for the date
-        
-    Returns:
-        DataFrame with formatted date column
-    """
-    df[column_name] = df[column_name].dt.strftime(format_str)
-    return df
-
 def sample_data(df, sample_rate=7):
     """
     Sample data by keeping every nth row.
@@ -59,19 +44,31 @@ def sample_data(df, sample_rate=7):
     """
     return df.iloc[::sample_rate, :]
 
-def select_and_rename_columns(df, column_map):
+def select_columns(df, columns):
     """
-    Select columns and rename them according to a mapping.
+    Select only specified columns from a DataFrame.
     
     Args:
         df: DataFrame containing the columns
+        columns: List of column names to select
+        
+    Returns:
+        DataFrame with only the selected columns
+    """
+    return df[columns]
+
+def rename_columns(df, column_map):
+    """
+    Rename columns according to a mapping.
+    
+    Args:
+        df: DataFrame containing the columns to rename
         column_map: Dictionary mapping original column names to new names
         
     Returns:
-        DataFrame with selected and renamed columns
+        DataFrame with renamed columns
     """
-    original_columns = list(column_map.keys())
-    return df[original_columns].rename(columns=column_map)
+    return df.rename(columns=column_map)
 
 def validate_columns(df, required_columns):
     """
