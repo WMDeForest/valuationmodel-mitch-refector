@@ -84,12 +84,20 @@ with tab1:
 
     if uploaded_file is not None:
         # ===== DATA PROCESSING SECTION =====
+        # 1. DATA LOADING
         # Read the uploaded CSV file
         df = pd.read_csv(uploaded_file)
         
-        # 2. DATA CLEANING AND PREPARATION
-        # Convert 'Date' column to datetime format with error handling
-        if 'Date' in df.columns:
+        # 2. DATA VALIDATION
+        # Check if required columns exist
+        if validate_columns(df, ['Date', 'Monthly Listeners']):
+            # 3. DATA SELECTION
+            # Keep only required columns
+            columns_to_keep = ['Date', 'Monthly Listeners']
+            df = select_columns(df, columns_to_keep)
+            
+            # 4. DATE CONVERSION
+            # Convert 'Date' column to datetime format with error handling
             df, date_issues = convert_to_datetime(df, 'Date', dayfirst=True)
             
             # Display any issues with date conversion
@@ -98,24 +106,19 @@ with tab1:
                     st.error(issue)
                 else:
                     st.warning(f"{issue} Please check your data.")
-        
-        # Keep only required columns
-        columns_to_keep = ['Date', 'Monthly Listeners']
-        df = select_columns(df, columns_to_keep)
-        
-        # Sample weekly data by keeping every 7th row
-        df = sample_data(df)
-        
-        # 3. DATA VALIDATION AND PROCESSING
-        if validate_columns(df, ['Date', 'Monthly Listeners']):
+            
+            # 5. DATA SAMPLING
+            # Sample weekly data by keeping every 7th row
+            df = sample_data(df)
+            
             # Sort data chronologically
             df = df.sort_values(by='Date')
 
-            # 4. ANOMALY DETECTION AND REMOVAL (calulate 4_week_MA)
+            # 6. ANOMALY DETECTION AND REMOVAL
             monthly_data = remove_anomalies(df)
             
             # ===== UI COMPONENTS SECTION =====
-            # 5. DATE RANGE SELECTION INTERFACE
+            # 7. DATE RANGE SELECTION INTERFACE
             min_date = monthly_data['Date'].min().to_pydatetime()
             max_date = monthly_data['Date'].max().to_pydatetime()
 
@@ -134,24 +137,24 @@ with tab1:
 
             if start_date and end_date:
                 # ===== CORE ANALYSIS SECTION =====
-                # 6. FILTER DATA FOR SELECTED DATE RANGE
+                # 8. FILTER DATA FOR SELECTED DATE RANGE
                 mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
                 subset_df = monthly_data[mask]
 
-                # 7. PREPARE DATA FOR DECAY MODELING
+                # 9. PREPARE DATA FOR DECAY MODELING
                 # Calculate months since first date
                 subset_df['Months'] = subset_df['Date'].apply(
                     lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
                 )
 
-                # 8. DECAY RATE CALCULATION
+                # 10. DECAY RATE CALCULATION
                 mldr, popt = calculate_decay_rate(subset_df)
                 
                 # ===== RESULTS DISPLAY SECTION =====
                 # Show key metrics
                 st.write(f'Exponential decay rate: {mldr}')
                 
-                # 9. VISUALIZATION
+                # 11. VISUALIZATION
                 fig, ax = plt.subplots(figsize=(10, 4))
                 # Plot the moving average
                 ax.plot(subset_df['Date'], subset_df['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
