@@ -24,7 +24,13 @@ from services.chartmetric_services.http_client import RequestsHTTPClient
 from utils.data_loader import get_mech_data, get_rates_data, load_local_csv
 from utils.population_utils.population_data import get_population_data
 from utils.population_utils.country_code_to_name import country_code_to_name
-from utils.data_processing import convert_to_datetime, format_date
+from utils.data_processing import (
+    convert_to_datetime, 
+    format_date,
+    sample_data,
+    select_and_rename_columns,
+    validate_columns
+)
 from utils.decay_rates import (
     ranges_sp,
     sp_range,
@@ -94,16 +100,17 @@ with tab1:
                     st.warning(f"{issue} Please check your data.")
         
         # Keep only required columns and rename for clarity
-        df = df[['Date', 'Monthly Listeners']].rename(columns={'Monthly Listeners': 'Streams'})
+        column_map = {'Date': 'Date', 'Monthly Listeners': 'Streams'}
+        df = select_and_rename_columns(df, column_map)
         
         # Sample weekly data by keeping every 7th row
-        df = df.iloc[::7, :]
+        df = sample_data(df)
         
         # Format date to DD/MM/YYYY
         df = format_date(df, 'Date')
         
         # 3. DATA VALIDATION AND PROCESSING
-        if 'Date' in df.columns and 'Streams' in df.columns:
+        if validate_columns(df, ['Date', 'Streams']):
             # Convert dates again after formatting (ensuring proper datetime objects)
             df, date_issues = convert_to_datetime(df, 'Date', dayfirst=True)
             
