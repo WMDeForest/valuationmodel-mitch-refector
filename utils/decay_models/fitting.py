@@ -9,6 +9,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
 from utils.decay_models.preprocessing import remove_anomalies
+from utils.data_processing import sample_data
 
 def fit_segment(months_since_release, streams):
     """
@@ -92,7 +93,7 @@ def calculate_decay_rate(monthly_data):
     decay_rate = popt[1]
     return decay_rate, popt 
 
-def calculate_monthly_listener_decay(df_monthly_listeners, start_date=None, end_date=None):
+def calculate_monthly_listener_decay(df_monthly_listeners, start_date=None, end_date=None, sample_rate=7):
     """
     Calculate the decay rate of monthly listeners from any data source.
     
@@ -102,6 +103,9 @@ def calculate_monthly_listener_decay(df_monthly_listeners, start_date=None, end_
         Must contain 'Date' and 'Monthly Listeners' columns
     start_date, end_date : datetime, optional
         Date range to analyze
+    sample_rate : int, optional
+        Sample every nth row (default: 7 for weekly sampling)
+        Set to None or 1 to use all data points
         
     Returns:
     --------
@@ -114,6 +118,10 @@ def calculate_monthly_listener_decay(df_monthly_listeners, start_date=None, end_
     """
     # Ensure data is sorted
     df = df_monthly_listeners.sort_values(by='Date')
+    
+    # Sample data if needed (e.g., keep every 7th row for weekly sampling)
+    if sample_rate and sample_rate > 1:
+        df = sample_data(df, sample_rate)
     
     # Process anomalies
     monthly_data = remove_anomalies(df)

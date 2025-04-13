@@ -110,13 +110,6 @@ with tab1:
                 else:
                     st.warning(f"{issue} Please check your data.")
             
-            # 5. DATA SAMPLING
-            # Sample weekly data by keeping every 7th row
-            df = sample_data(df)
-            
-            # Sort data chronologically
-            df = df.sort_values(by='Date')
-
             # ===== UI COMPONENTS SECTION =====
             # First get min/max dates to set up the date range slider
             initial_results = calculate_monthly_listener_decay(df)
