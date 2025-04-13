@@ -122,7 +122,7 @@ with tab1:
             # Sort data chronologically
             df = df.sort_values(by='Date')
 
-            # 4. ANOMALY DETECTION AND REMOVAL
+            # 4. ANOMALY DETECTION AND REMOVAL (calulate 4_week_MA)
             monthly_data = remove_anomalies(df)
             
             # ===== UI COMPONENTS SECTION =====
