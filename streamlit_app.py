@@ -28,7 +28,8 @@ from utils.data_processing import (
     convert_to_datetime, 
     format_date,
     sample_data,
-    select_and_rename_columns,
+    select_columns,
+    rename_columns,
     validate_columns
 )
 from utils.decay_rates import (
@@ -101,7 +102,8 @@ with tab1:
         
         # Keep only required columns and rename for clarity
         column_map = {'Date': 'Date', 'Monthly Listeners': 'Streams'}
-        df = select_and_rename_columns(df, column_map)
+        df = select_columns(df, list(column_map.keys()))
+        df = rename_columns(df, column_map)
         
         # Sample weekly data by keeping every 7th row
         df = sample_data(df)
