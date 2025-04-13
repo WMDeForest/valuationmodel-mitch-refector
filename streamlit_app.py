@@ -76,6 +76,7 @@ with tab1:
     uploaded_file = st.file_uploader("Spotify Monthly Listeners", type="csv")
 
     if uploaded_file is not None:
+        # ===== DATA PROCESSING SECTION =====
         # Read the uploaded CSV file
         df = pd.read_csv(uploaded_file)
         
@@ -113,7 +114,8 @@ with tab1:
 
             # 4. ANOMALY DETECTION AND REMOVAL
             monthly_data = remove_anomalies(df)
-
+            
+            # ===== UI COMPONENTS SECTION =====
             # 5. DATE RANGE SELECTION INTERFACE
             min_date = monthly_data['Date'].min().to_pydatetime()
             max_date = monthly_data['Date'].max().to_pydatetime()
@@ -132,23 +134,29 @@ with tab1:
             end_date = pd.Timestamp(end_date)
 
             if start_date and end_date:
-                # 6. ANALYSIS FOR SELECTED DATE RANGE
-                # Filter data based on selected range
+                # ===== CORE ANALYSIS SECTION =====
+                # 6. FILTER DATA FOR SELECTED DATE RANGE
                 mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
                 subset_df = monthly_data[mask]
 
-                # Calculate months since first date (for decay modeling)
+                # 7. PREPARE DATA FOR DECAY MODELING
+                # Calculate months since first date
                 subset_df['Months'] = subset_df['Date'].apply(
                     lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
                 )
 
-                # 7. DECAY RATE CALCULATION
+                # 8. DECAY RATE CALCULATION
                 mldr, popt = calculate_decay_rate(subset_df)
+                
+                # ===== RESULTS DISPLAY SECTION =====
+                # Show key metrics
                 st.write(f'Exponential decay rate: {mldr}')
-
-                # 8. VISUALIZATION OF RESULTS
+                
+                # 9. VISUALIZATION
                 fig, ax = plt.subplots(figsize=(10, 4))
+                # Plot the moving average
                 ax.plot(subset_df['Date'], subset_df['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
+                # Plot the fitted decay curve using pre-calculated parameters
                 ax.plot(subset_df['Date'], exponential_decay(subset_df['Months'], *popt), 
                        label='Fitted Decay Curve', color='red', linestyle='--')
                 
