@@ -29,7 +29,7 @@ The backtest datasets typically contain:
 | Column | Description |
 |--------|-------------|
 | id | Primary key, auto-incrementing |
-| artist_id | Reference to the artist |
+| cm_artist_id | Reference to the artist |
 | sp_streams_date | Date of the streaming data point |
 | monthly_listeners | Count of monthly listeners for that date |
 | created_at | Timestamp when the record was created |
@@ -47,14 +47,18 @@ The backtest datasets typically contain:
 ### Current Dataset Statistics:
 
 **Artist Data:**
-- 1656 unique artists in the training dataset
-- Reduced from 2212 artists in the source data
+- 1,565 unique artists in the final training dataset
+- Initially 1,656 artists after filtering from 2,212 in the source data
 - Reduction due to filtering out artists without sufficient training data (90+ days) or validation data (730+ days)
 
 **Track Data:**
-- 9,974 unique tracks in the training dataset
-- Reduced from 24,188 tracks in the source data
-- Reduction due to filtering out tracks without sufficient training data (90+ days) or validation data (730+ days)
+- Initial filtering: 9,974 unique tracks from 24,188 in the source data
+- Final dataset: 8,318 unique tracks across 1,565 unique artists
+- Further reduction due to removing orphaned tracks (tracks without corresponding artist data)
+
+## Data Consistency
+
+To ensure that forecasting models can be run properly, orphaned tracks that didn't have corresponding artists in the artist training dataset were removed. This data cleanup ensures that for every track in the dataset, we also have artist-level data available.
 
 ## Usage
 
