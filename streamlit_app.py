@@ -71,61 +71,53 @@ st.title('mitch_refactor_valuation_app')
 tab1, tab2= st.tabs(["File Uploader", "placeholder"])
 
 with tab1:
-
-    uploaded_file = st.file_uploader("Spotify streams - Weekly - 24 Months", type="csv")
+    # ===== TAB 1: SPOTIFY MONTHLY LISTENERS ANALYSIS =====
+    # 1. DATA UPLOAD AND INITIAL PROCESSING
+    uploaded_file = st.file_uploader("Spotify Monthly Listeners", type="csv")
 
     if uploaded_file is not None:
+        # Read the uploaded CSV file
         df = pd.read_csv(uploaded_file)
         
-        ##UUPP1##
-        
-            # Convert 'Date' column to datetime format (assuming the 'Date' column exists)
+        # 2. DATA CLEANING AND PREPARATION
+        # Convert 'Date' column to datetime format with error handling
         if 'Date' in df.columns:
-            # Try converting 'Date' column to datetime format with error handling
             try:
                 df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
             except Exception as e:
                 st.error(f"Failed to convert Date column: {e}")
 
-            # Check for any NaT values which might indicate parsing errors
+            # Warning for unparseable dates
             if df['Date'].isna().any():
                 st.warning("Some dates couldn't be parsed and have been set to 'NaT'. Please check your data.")
-
         
-        # Keep only the 'Date' and 'Monthly Listeners' columns, renaming 'Monthly Listeners' to 'Streams'
+        # Keep only required columns and rename for clarity
         df = df[['Date', 'Monthly Listeners']].rename(columns={'Monthly Listeners': 'Streams'})
         
-        # Keep every 7th row
+        # Sample weekly data by keeping every 7th row
         df = df.iloc[::7, :]
         
-        # Optionally, you can format the date to be in 'DD/MM/YYYY' format if needed
+        # Format date to DD/MM/YYYY
         df['Date'] = df['Date'].dt.strftime('%d/%m/%Y')
-        ##UUPP1##
         
-        
-        # Ensure the data has the expected columns
+        # 3. DATA VALIDATION AND PROCESSING
         if 'Date' in df.columns and 'Streams' in df.columns:
-            
-            if 'Date' in df.columns:
-                # Try converting 'Date' column to datetime format with error handling
-                try:
-                    df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
-                except Exception as e:
-                    st.error(f"Failed to convert Date column: {e}")
-        
-                # Check for any NaT values which might indicate parsing errors
-                if df['Date'].isna().any():
-                    st.warning("Some dates couldn't be parsed and have been set to 'NaT'. Please check your data.")
+            # Convert dates again after formatting (ensuring proper datetime objects)
+            try:
+                df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
+            except Exception as e:
+                st.error(f"Failed to convert Date column: {e}")
+                
+            # Sort data chronologically
             df = df.sort_values(by='Date')
 
-            # Remove anomalies
+            # 4. ANOMALY DETECTION AND REMOVAL
             monthly_data = remove_anomalies(df)
 
-            # Determine the range of dates
-            min_date = monthly_data['Date'].min().to_pydatetime()  # Convert to datetime
-            max_date = monthly_data['Date'].max().to_pydatetime()  # Convert to datetime
+            # 5. DATE RANGE SELECTION INTERFACE
+            min_date = monthly_data['Date'].min().to_pydatetime()
+            max_date = monthly_data['Date'].max().to_pydatetime()
 
-            # Create a slider for date range selection
             st.write("Select Date Range:")
             start_date, end_date = st.slider(
                 "Select date range",
@@ -135,26 +127,32 @@ with tab1:
                 format="YYYY-MM-DD"
             )
 
-            # Convert slider values back to Timestamp
+            # Convert slider values to Timestamp objects
             start_date = pd.Timestamp(start_date)
             end_date = pd.Timestamp(end_date)
 
             if start_date and end_date:
-                # Filter the data based on the selected date range
+                # 6. ANALYSIS FOR SELECTED DATE RANGE
+                # Filter data based on selected range
                 mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
                 subset_df = monthly_data[mask]
 
-                # Add Months column for the filtered subset
-                subset_df['Months'] = subset_df['Date'].apply(lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month)
+                # Calculate months since first date (for decay modeling)
+                subset_df['Months'] = subset_df['Date'].apply(
+                    lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
+                )
 
-                # Calculate the decay rate
+                # 7. DECAY RATE CALCULATION
                 mldr, popt = calculate_decay_rate(subset_df)
-                st.write(f'Exponential decay ratemldr: {mldr}')
+                st.write(f'Exponential decay rate: {mldr}')
 
-                # Plot the data and the fitted curve
-                fig, ax = plt.subplots(figsize=(10, 4))  # Half the height
+                # 8. VISUALIZATION OF RESULTS
+                fig, ax = plt.subplots(figsize=(10, 4))
                 ax.plot(subset_df['Date'], subset_df['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
-                ax.plot(subset_df['Date'], exponential_decay(subset_df['Months'], *popt), label='Fitted Decay Curve', color='red', linestyle='--')
+                ax.plot(subset_df['Date'], exponential_decay(subset_df['Months'], *popt), 
+                       label='Fitted Decay Curve', color='red', linestyle='--')
+                
+                # Plot formatting and styling
                 ax.set_xlabel('Date', fontsize=12)
                 ax.set_ylabel('Streams', fontsize=12)
                 ax.set_title(f'Moving Average and Exponential Decay', fontsize=14, weight='bold')
@@ -162,16 +160,17 @@ with tab1:
                 ax.set_ylim(bottom=0)
                 plt.xticks(rotation=45)
                 
-                # Remove background color
+                # Visual enhancements
                 fig.patch.set_visible(False)
-                ax.set_facecolor('none')  # Transparent background for the plot area
-                ax.patch.set_alpha(0)     # Remove background color of the axes
-                plt.tight_layout()        # Adjust plot to fit labels
+                ax.set_facecolor('none')
+                ax.patch.set_alpha(0)
+                plt.tight_layout()
+                
+                # Display the plot
                 st.pyplot(fig)
         else:
             st.error("The uploaded file does not contain the required columns 'Date' and 'Streams'.")
             
-        
     #uploaded_file = st.file_uploader("Tracklist", type=["csv"])
     uploaded_files_unique = st.file_uploader("Upload multiple CSV files for track data", type=['csv'], accept_multiple_files=True)
     #uploaded_file_additional = st.file_uploader("Mechanical Royalties USA", type=["csv"])
