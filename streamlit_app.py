@@ -31,7 +31,9 @@ from utils.data_processing import (
     rename_columns,
     validate_columns,
     extract_earliest_date,
-    calculate_period_streams
+    calculate_period_streams,
+    process_audience_geography,
+    process_ownership_data
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -230,49 +232,16 @@ with tab1:
         df = track_catalog_df
 
         # ===== AUDIENCE GEOGRAPHY PROCESSING =====
-        percentage_usa = 1.0  # Default value if no geography data
-        if uploaded_file_3:
-            audience_df = pd.read_csv(uploaded_file_3)
-
-            # Extract and process geographical data
-            audience_df = audience_df[['Country', 'Spotify Monthly Listeners']]
-            audience_df = audience_df.groupby('Country', as_index=False)['Spotify Monthly Listeners'].sum()
-            
-            # Calculate percentage distribution
-            total_listeners = audience_df['Spotify Monthly Listeners'].sum()
-            audience_df['Spotify monthly listeners (%)'] = (audience_df['Spotify Monthly Listeners'] / total_listeners) * 100
-            
-            # Normalize percentage values
-            audience_df["Spotify monthly listeners (%)"] = pd.to_numeric(audience_df["Spotify monthly listeners (%)"], errors='coerce')
-            audience_df["Spotify monthly listeners (%)"] = audience_df["Spotify monthly listeners (%)"] / 100
-            
-            # Extract US percentage for royalty calculations
-            percentage_usa = audience_df.loc[audience_df["Country"] == "United States", "Spotify monthly listeners (%)"].values[0]
+        # Process the audience geography data to determine geographic distribution of listeners
+        # This data is used to apply country-specific royalty rates in revenue projections
+        # If no geography data is provided, assume 100% US market for royalty calculations
+        audience_df, percentage_usa = process_audience_geography(uploaded_file_3)
 
         # ===== OWNERSHIP DATA PROCESSING =====
-        if uploaded_file_ownership is not None:
-            # Load ownership data with encoding handling
-            try:
-                ownership_df = pd.read_csv(uploaded_file_ownership, encoding='latin1')
-            except UnicodeDecodeError:
-                ownership_df = pd.read_csv(uploaded_file_ownership, encoding='utf-8')
-        
-            # Clean and normalize ownership data
-            ownership_df['Ownership(%)'] = ownership_df['Ownership(%)'].replace('', 1)
-            ownership_df['MLC Claimed(%)'] = ownership_df['MLC Claimed(%)'].replace('', 0)
-            ownership_df['Ownership(%)'] = pd.to_numeric(ownership_df['Ownership(%)'], errors='coerce').fillna(1)
-            ownership_df['MLC Claimed(%)'] = pd.to_numeric(ownership_df['MLC Claimed(%)'], errors='coerce').fillna(0)
-            
-            # Convert percentages to decimal format
-            ownership_df['Ownership(%)'] = ownership_df['Ownership(%)'].apply(lambda x: x / 100 if x > 1 else x)
-            ownership_df['MLC Claimed(%)'] = ownership_df['MLC Claimed(%)'].apply(lambda x: x / 100 if x > 1 else x)
-        else:
-            # Create empty ownership dataframe if no file is uploaded
-            ownership_df = pd.DataFrame({
-                'track_name': df['track_name'],
-                'Ownership(%)': [None] * len(df),
-                'MLC Claimed(%)': [None] * len(df)
-            })
+        # Process ownership and MLC claim information to accurately calculate revenue shares
+        # This ensures all calculations account for partial ownership and existing royalty claims
+        # If no ownership data is provided, assume 100% ownership and 0% MLC claims
+        ownership_df = process_ownership_data(uploaded_file_ownership, df['track_name'])
         
         # ===== DATA TRANSFORMATION FOR ANALYSIS =====
         # Format dates for royalty calculations

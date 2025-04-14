@@ -119,4 +119,108 @@ def calculate_period_streams(df, cumulative_column, days_back):
     else:
         period_streams = total_streams
         
-    return period_streams 
+    return period_streams
+
+def process_audience_geography(geography_file=None):
+    """
+    Process audience geography data from uploaded file.
+    Returns a DataFrame with audience distribution and the USA percentage.
+    
+    Parameters:
+    -----------
+    geography_file : file object, optional
+        The uploaded CSV file containing audience geography data
+        
+    Returns:
+    --------
+    tuple:
+        A tuple containing two elements:
+        
+        audience_df : pandas.DataFrame
+            A DataFrame containing geographical distribution of listeners with columns:
+            - 'Country': The country name
+            - 'Spotify Monthly Listeners': Raw count of listeners from this country
+            - 'Spotify monthly listeners (%)': Percentage of total listeners (as a decimal)
+            This data is used to apply country-specific royalty rates during valuation.
+            
+        percentage_usa : float
+            The proportion of listeners from the United States as a decimal (0.0-1.0).
+            This is extracted from the audience_df for convenience since US streams
+            are often calculated separately in royalty formulas.
+            Defaults to 1.0 (100% USA) if no geography data is provided or if USA
+            is not found in the data.
+    """
+    # Default value if no geography data
+    percentage_usa = 1.0
+    audience_df = pd.DataFrame()
+    
+    if geography_file:
+        # Process uploaded file
+        audience_df = pd.read_csv(geography_file)
+        
+        # Extract and process geographical data
+        audience_df = audience_df[['Country', 'Spotify Monthly Listeners']]
+        audience_df = audience_df.groupby('Country', as_index=False)['Spotify Monthly Listeners'].sum()
+        
+        # Calculate percentage distribution
+        total_listeners = audience_df['Spotify Monthly Listeners'].sum()
+        audience_df['Spotify monthly listeners (%)'] = (audience_df['Spotify Monthly Listeners'] / total_listeners) * 100
+        
+        # Normalize percentage values
+        audience_df["Spotify monthly listeners (%)"] = pd.to_numeric(audience_df["Spotify monthly listeners (%)"], errors='coerce')
+        audience_df["Spotify monthly listeners (%)"] = audience_df["Spotify monthly listeners (%)"] / 100
+        
+        # Extract US percentage for royalty calculations
+        if "United States" in audience_df["Country"].values:
+            percentage_usa = audience_df.loc[audience_df["Country"] == "United States", "Spotify monthly listeners (%)"].values[0]
+    
+    return audience_df, percentage_usa
+
+def process_ownership_data(ownership_file, track_names):
+    """
+    Process song ownership data from uploaded file.
+    
+    Parameters:
+    -----------
+    ownership_file : file object, optional
+        The uploaded CSV file containing ownership data
+    track_names : list
+        List of track names for which to create default ownership entries if no file is provided
+
+    Returns:
+    --------
+    pandas.DataFrame:
+        A DataFrame containing standardized ownership information with columns:
+        - 'track_name': Name of the track
+        - 'Ownership(%)': Percentage ownership as a decimal (0.0-1.0)
+        - 'MLC Claimed(%)': Percentage of mechanical license claims as a decimal (0.0-1.0)
+        
+        Both percentage values are normalized to decimal format (e.g., 50% → 0.5).
+        When no ownership file is provided, defaults to 100% ownership (1.0) and 
+        0% MLC claims (0.0) for all tracks in track_names. 
+    """
+    if ownership_file is not None:
+        # Load ownership data with encoding handling
+        try:
+            ownership_df = pd.read_csv(ownership_file, encoding='latin1')
+        except UnicodeDecodeError:
+            ownership_df = pd.read_csv(ownership_file, encoding='utf-8')
+    
+        # Clean and normalize ownership data
+        ownership_df['Ownership(%)'] = ownership_df['Ownership(%)'].replace('', 1)
+        ownership_df['MLC Claimed(%)'] = ownership_df['MLC Claimed(%)'].replace('', 0)
+        ownership_df['Ownership(%)'] = pd.to_numeric(ownership_df['Ownership(%)'], errors='coerce').fillna(1)
+        ownership_df['MLC Claimed(%)'] = pd.to_numeric(ownership_df['MLC Claimed(%)'], errors='coerce').fillna(0)
+        
+        # Convert percentages to decimal format
+        ownership_df['Ownership(%)'] = ownership_df['Ownership(%)'].apply(lambda x: x / 100 if x > 1 else x)
+        ownership_df['MLC Claimed(%)'] = ownership_df['MLC Claimed(%)'].apply(lambda x: x / 100 if x > 1 else x)
+    else:
+        # Create empty ownership dataframe if no file is uploaded
+        ownership_df = pd.DataFrame({
+            'track_name': track_names,
+            'Ownership(%)': [1.0] * len(track_names),
+            'MLC Claimed(%)': [0.0] * len(track_names)
+        })
+    
+    return ownership_df 
