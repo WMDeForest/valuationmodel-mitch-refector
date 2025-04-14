@@ -29,7 +29,8 @@ from utils.data_processing import (
     sample_data,
     select_columns,
     rename_columns,
-    validate_columns
+    validate_columns,
+    extract_earliest_date
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -50,7 +51,7 @@ from utils.decay_models import (
     fit_segment,
     update_fitted_params,
     forecast_values,
-    analyze_listener_decay,
+    analyze_listener_decay
 )
 
 # ===== MODELING FUNCTIONS =====
@@ -188,8 +189,8 @@ with tab1:
             # Read the track data CSV
             df_track_data_unique = pd.read_csv(file_unique)
 
-            # Extract release date from first row
-            release_date_unique = pd.to_datetime(df_track_data_unique['Date'].iloc[0], format='%b %d, %Y').strftime('%d/%m/%Y')
+            # Extract the first available date from the track data
+            data_start_date = extract_earliest_date(df_track_data_unique, 'Date')
 
             # Get total streams (most recent cumulative value)
             total_value_unique = df_track_data_unique['Value'].iloc[-1]
@@ -219,7 +220,7 @@ with tab1:
             # Add track data to summary list
             track_summary_list.append({
                 'Track': track_name_unique,                      # Track Name
-                'Release date': release_date_unique,             # Release Date
+                'First tracking date': data_start_date,          # First date with available streaming data
                 'Spotify Streams 1m': spotify_streams_1m_unique, # Last 30 days Streams
                 'Spotify Streams 3m': spotify_streams_3m_unique, # Last 90 Days Streams
                 'Spotify Streams 12m': spotify_streams_12m_unique, # Last 365 Days Streams
@@ -268,11 +269,11 @@ with tab1:
             df['total_streams_12_months'] = df['Spotify Streams 12m']
         if 'Spotify Streams Total' in df.columns:
             df['historical'] = df['Spotify Streams Total']
-        if 'Release date' in df.columns:
-            df['release_date'] = df['Release date']
+        if 'First tracking date' in df.columns:
+            df['data_start_date'] = df['First tracking date']  # This is actually the first available tracking date
 
         # Clean up dataframe by removing original columns after mapping
-        columns_to_drop = ["Release date", "Spotify Streams 1m", "Spotify Streams 3m", "Spotify Streams 12m", "Spotify Streams Total"]
+        columns_to_drop = ["First tracking date", "Spotify Streams 1m", "Spotify Streams 3m", "Spotify Streams 12m", "Spotify Streams Total"]
         df.drop(columns=columns_to_drop, inplace=True)
 
         # 6. FORECAST PARAMETERS SETUP
@@ -330,7 +331,7 @@ with tab1:
                 total_streams_3_months = song_data['total_streams_3_months']
                 streams_last_month = song_data['streams_last_month']
                 historical = song_data['historical']
-                release_date = song_data['release_date']
+                data_start_date = song_data['data_start_date']
 
                 # ===== 2. UPDATE DECAY PARAMETERS =====
                 updated_fitted_params_df = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
@@ -338,8 +339,8 @@ with tab1:
                     updated_fitted_params = updated_fitted_params_df.to_dict(orient='records')
 
                 # ===== 3. CALCULATE TIME SINCE RELEASE AND AVERAGE STREAMS =====
-                release_date = datetime.strptime(release_date, "%d/%m/%Y")
-                delta = current_date - release_date
+                tracking_start_date = datetime.strptime(data_start_date, "%d/%m/%Y")
+                delta = current_date - tracking_start_date
                 months_since_release_total = delta.days // 30
                 
                 # Calculate monthly averages for different time periods
@@ -449,12 +450,12 @@ with tab1:
                 total_forecast_value = forecasts_df.loc[:240, 'forecasted_value'].sum()
 
                 # ===== 8. CALCULATE HISTORICAL VALUE =====
-                release_date = datetime.strptime(song_data['release_date'], "%d/%m/%Y")
-                start_date = release_date.strftime('%Y-%m')
+                tracking_start_date = datetime.strptime(data_start_date, "%d/%m/%Y")
+                start_date = tracking_start_date.strftime('%Y-%m')
                 end_date = '2024-02'  # Default end date
                 
-                # Adjust end date if release date is more recent
-                if release_date.strftime('%Y-%m') >= end_date:
+                # Adjust end date if tracking date is more recent
+                if tracking_start_date.strftime('%Y-%m') >= end_date:
                     end_date = df_additional['Date'].max().strftime('%Y-%m')
                     
                 # Filter mechanical royalty data for relevant date range

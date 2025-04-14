@@ -81,4 +81,20 @@ def validate_columns(df, required_columns):
     Returns:
         bool: True if all required columns are present, False otherwise
     """
-    return all(column in df.columns for column in required_columns) 
+    return all(column in df.columns for column in required_columns)
+
+def extract_earliest_date(df, date_column, input_format='%b %d, %Y', output_format='%d/%m/%Y'):
+    """
+    Extract the earliest date from a DataFrame's date column and format it.
+    
+    Args:
+        df: DataFrame containing the date column
+        date_column: Name of the column containing dates
+        input_format: Format of the dates in the input data
+        output_format: Desired format for the output date
+        
+    Returns:
+        str: The earliest date formatted according to output_format
+    """
+    earliest_date = pd.to_datetime(df[date_column].iloc[0], format=input_format).strftime(output_format)
+    return earliest_date 
