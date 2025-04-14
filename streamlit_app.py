@@ -82,8 +82,8 @@ tab1, tab2= st.tabs(["File Uploader", "placeholder"])
 
 with tab1:
     # ===== TAB 1: SPOTIFY MONTHLY LISTENERS ANALYSIS =====
-    # 1. DATA UPLOAD AND INITIAL PROCESSING
-    uploaded_file = st.file_uploader("Spotify Monthly Listeners", type="csv")
+    # 1. DATA UPLOAD
+    uploaded_file = st.file_uploader("Artist Monthly Spotify Listeners", type="csv")
 
     if uploaded_file is not None:
         # ===== DATA PROCESSING SECTION =====
@@ -110,10 +110,12 @@ with tab1:
                 else:
                     st.warning(f"{issue} Please check your data.")
             
-            # ===== UI COMPONENTS SECTION =====
+           
             # 5. INITIAL DECAY ANALYSIS
             # Calculate decay rates and get min/max dates for the UI slider
             initial_results = analyze_listener_decay(df)
+
+            # ===== UI COMPONENTS SECTION =====
             min_date = initial_results['min_date']
             max_date = initial_results['max_date']
             
@@ -173,7 +175,7 @@ with tab1:
     # ===== TRACK DATA MANAGEMENT =====
     # 1. FILE UPLOADS FOR ADDITIONAL DATA
     #uploaded_file = st.file_uploader("Tracklist", type=["csv"])
-    uploaded_files_unique = st.file_uploader("Upload multiple CSV files for track data", type=['csv'], accept_multiple_files=True)
+    uploaded_files_unique = st.file_uploader("Monthly Track Spotify Streams", type=['csv'], accept_multiple_files=True)
     uploaded_file_3 = st.file_uploader("Audience Geography", type=["csv"])
     uploaded_file_ownership = st.file_uploader("MLC Claimed and Song Ownership", type="csv")
 
