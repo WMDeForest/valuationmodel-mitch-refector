@@ -185,32 +185,33 @@ with tab1:
     track_summary_list = []
 
     if uploaded_files_unique:
-        # Initialize an empty DataFrame to store track summary data
-        track_summary_df = pd.DataFrame()
+        # Initialize an empty DataFrame that will store data for all tracks (our catalog)
+        track_catalog_df = pd.DataFrame()
         
-        # Process each uploaded track file
+        # Process each uploaded track file - iterate through all CSV files the user uploaded
         for file_unique in uploaded_files_unique:
-            # Extract track name from filename
+            # Extract track name from the filename (expected format: "Artist - TrackName.csv")
             track_name_unique = file_unique.name.split(' - ')[1].strip()
             
-            # Read the track data CSV
+            # Read the track's streaming data from CSV
             df_track_data_unique = pd.read_csv(file_unique)
             
-            # Rename the 'Value' column to a more descriptive name
+            # Make column names more descriptive - 'Value' becomes 'CumulativeStreams'
             df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
 
-            # Extract the first available date from the track data
+            # Get the first date from the data (not necessarily release date, just first tracking date)
             data_start_date = extract_earliest_date(df_track_data_unique, 'Date')
 
-            # Get total streams (most recent cumulative value)
+            # Extract the latest (most recent) cumulative stream count
             total_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
 
-            # Calculate period-specific stream counts using utility function
+            # Calculate period-specific stream counts using our utility function
+            # These represent streams in the last 30/90/365 days
             track_streams_last_30days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 30)
             track_streams_last_90days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 90)
             track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
             
-            # Create a single row DataFrame with this track's data
+            # Create a single row DataFrame containing all key metrics for this track
             track_data = pd.DataFrame({
                 'track_name': [track_name_unique],
                 'data_start_date': [data_start_date],
@@ -220,11 +221,13 @@ with tab1:
                 'total_track_streams': [total_track_streams]
             })
             
-            # Append to the summary DataFrame
-            track_summary_df = pd.concat([track_summary_df, track_data], ignore_index=True)
+            # Add this track's data to our catalog of all tracks
+            # Each time through the loop, we add one more row to the catalog
+            track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
 
-        # Use the built DataFrame
-        df = track_summary_df
+        # Set our main working DataFrame to be the catalog we've built
+        # This DataFrame will be used throughout the rest of the application
+        df = track_catalog_df
 
         # 4. OWNERSHIP DATA PROCESSING
         if uploaded_file_ownership is not None:
