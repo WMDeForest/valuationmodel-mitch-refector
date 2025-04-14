@@ -175,16 +175,16 @@ with tab1:
             st.error("The uploaded file does not contain the required columns 'Date' and 'Monthly Listeners'.")
             
     # ===== TRACK DATA MANAGEMENT =====
-    # 1. FILE UPLOADS FOR ADDITIONAL DATA
+    # 1. FILE UPLOADS SECTION
     #uploaded_file = st.file_uploader("Tracklist", type=["csv"])
     uploaded_files_unique = st.file_uploader("Monthly Track Spotify Streams", type=['csv'], accept_multiple_files=True)
     uploaded_file_3 = st.file_uploader("Audience Geography", type=["csv"])
     uploaded_file_ownership = st.file_uploader("MLC Claimed and Song Ownership", type="csv")
 
-    # 2. TRACK DATA PROCESSING
-    track_summary_list = []
-
+    # 3. DATA PROCESSING SECTION
+    # Only process data if track files have been uploaded
     if uploaded_files_unique:
+        # ===== TRACK DATA PROCESSING =====
         # Initialize an empty DataFrame that will store data for all tracks (our catalog)
         track_catalog_df = pd.DataFrame()
         
@@ -229,7 +229,27 @@ with tab1:
         # This DataFrame will be used throughout the rest of the application
         df = track_catalog_df
 
-        # 4. OWNERSHIP DATA PROCESSING
+        # ===== AUDIENCE GEOGRAPHY PROCESSING =====
+        percentage_usa = 1.0  # Default value if no geography data
+        if uploaded_file_3:
+            audience_df = pd.read_csv(uploaded_file_3)
+
+            # Extract and process geographical data
+            audience_df = audience_df[['Country', 'Spotify Monthly Listeners']]
+            audience_df = audience_df.groupby('Country', as_index=False)['Spotify Monthly Listeners'].sum()
+            
+            # Calculate percentage distribution
+            total_listeners = audience_df['Spotify Monthly Listeners'].sum()
+            audience_df['Spotify monthly listeners (%)'] = (audience_df['Spotify Monthly Listeners'] / total_listeners) * 100
+            
+            # Normalize percentage values
+            audience_df["Spotify monthly listeners (%)"] = pd.to_numeric(audience_df["Spotify monthly listeners (%)"], errors='coerce')
+            audience_df["Spotify monthly listeners (%)"] = audience_df["Spotify monthly listeners (%)"] / 100
+            
+            # Extract US percentage for royalty calculations
+            percentage_usa = audience_df.loc[audience_df["Country"] == "United States", "Spotify monthly listeners (%)"].values[0]
+
+        # ===== OWNERSHIP DATA PROCESSING =====
         if uploaded_file_ownership is not None:
             # Load ownership data with encoding handling
             try:
@@ -254,47 +274,27 @@ with tab1:
                 'MLC Claimed(%)': [None] * len(df)
             })
         
-        # 5. DATA TRANSFORMATION FOR ANALYSIS
+        # ===== DATA TRANSFORMATION FOR ANALYSIS =====
         # Format dates for royalty calculations
         df_additional['Date'] = pd.to_datetime(df_additional['Date'], format='%b-%y')
         
-        # No need for column mapping since we're using consistent names
-        
-        # 6. FORECAST PARAMETERS SETUP
+        # ===== FORECAST PARAMETERS SETUP =====
         stream_influence_factor = 1000
         forecast_periods = 400
         current_date = datetime.today()
 
-        # 7. USER INTERFACE FOR TRACK SELECTION
+        # ===== UI DISPLAY AND TRACK SELECTION =====
         st.write("Data Preview:")
         st.write(df)
 
         songs = sorted(df['track_name'].unique(), key=lambda x: x.lower())
         selected_songs = st.multiselect('Select Songs', songs)
-
-        # 8. AUDIENCE GEOGRAPHY PROCESSING
-        if uploaded_file_3:
-            audience_df = pd.read_csv(uploaded_file_3)
-
-            # Extract and process geographical data
-            audience_df = audience_df[['Country', 'Spotify Monthly Listeners']]
-            audience_df = audience_df.groupby('Country', as_index=False)['Spotify Monthly Listeners'].sum()
-            
-            # Calculate percentage distribution
-            total_listeners = audience_df['Spotify Monthly Listeners'].sum()
-            audience_df['Spotify monthly listeners (%)'] = (audience_df['Spotify Monthly Listeners'] / total_listeners) * 100
-            
-            # Normalize percentage values
-            audience_df["Spotify monthly listeners (%)"] = pd.to_numeric(audience_df["Spotify monthly listeners (%)"], errors='coerce')
-            audience_df["Spotify monthly listeners (%)"] = audience_df["Spotify monthly listeners (%)"] / 100
-            
-            # Extract US percentage for royalty calculations
-            percentage_usa = audience_df.loc[audience_df["Country"] == "United States", "Spotify monthly listeners (%)"].values[0]
-            
-        # 9. FINANCIAL PARAMETERS
+        
+        # ===== FINANCIAL PARAMETERS =====
+        # Positioned here just before forecasting calculations
         discount_rate = st.number_input('Discount Rate (%)', min_value=0.00, max_value=10.00, value=0.00, step=0.01, format="%.2f")/100
 
-        # 10. INITIALIZE RESULTS STORAGE
+        # ===== INITIALIZE RESULTS STORAGE FOR FORECAST CALCULATIONS =====
         song_forecasts = []
         weights_and_changes = []
 
