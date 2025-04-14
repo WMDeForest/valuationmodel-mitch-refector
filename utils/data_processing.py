@@ -97,4 +97,26 @@ def extract_earliest_date(df, date_column, input_format='%b %d, %Y', output_form
         str: The earliest date formatted according to output_format
     """
     earliest_date = pd.to_datetime(df[date_column].iloc[0], format=input_format).strftime(output_format)
-    return earliest_date 
+    return earliest_date
+
+def calculate_period_streams(df, cumulative_column, days_back):
+    """
+    Calculate streams for a specific period by comparing the most recent 
+    cumulative value with an earlier value.
+    
+    Args:
+        df: DataFrame containing streaming data with cumulative values
+        cumulative_column: Name of the column containing cumulative stream values
+        days_back: Number of days to look back for the comparison
+        
+    Returns:
+        int/float: Stream count for the specified period
+    """
+    total_streams = df[cumulative_column].iloc[-1]
+    
+    if len(df) > days_back:
+        period_streams = total_streams - df[cumulative_column].iloc[-(days_back + 1)]
+    else:
+        period_streams = total_streams
+        
+    return period_streams 

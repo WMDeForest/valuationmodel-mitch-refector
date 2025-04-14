@@ -30,7 +30,8 @@ from utils.data_processing import (
     select_columns,
     rename_columns,
     validate_columns,
-    extract_earliest_date
+    extract_earliest_date,
+    calculate_period_streams
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -184,8 +185,14 @@ with tab1:
     track_summary_list = []
 
     if uploaded_files_unique:
+        # Initialize an empty DataFrame to store track summary data
+        track_summary_df = pd.DataFrame()
+        
         # Process each uploaded track file
         for file_unique in uploaded_files_unique:
+            # Extract track name from filename
+            track_name_unique = file_unique.name.split(' - ')[1].strip()
+            
             # Read the track data CSV
             df_track_data_unique = pd.read_csv(file_unique)
             
@@ -196,43 +203,28 @@ with tab1:
             data_start_date = extract_earliest_date(df_track_data_unique, 'Date')
 
             # Get total streams (most recent cumulative value)
-            total_value_unique = df_track_data_unique['CumulativeStreams'].iloc[-1]
+            total_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
 
-            # Calculate period-specific stream counts
-            # Last 30 days streams 
-            if len(df_track_data_unique) > 30:
-                spotify_streams_1m_unique = total_value_unique - df_track_data_unique['CumulativeStreams'].iloc[-31]
-            else:
-                spotify_streams_1m_unique = total_value_unique
+            # Calculate period-specific stream counts using utility function
+            track_streams_last_30days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 30)
+            track_streams_last_90days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 90)
+            track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
             
-            # Last 90 days streams
-            if len(df_track_data_unique) > 90:
-                spotify_streams_3m_unique = total_value_unique - df_track_data_unique['CumulativeStreams'].iloc[-91]
-            else:
-                spotify_streams_3m_unique = total_value_unique
-            
-            # Last 12 months streams (last 365 days)
-            if len(df_track_data_unique) > 365:
-                spotify_streams_12m_unique = total_value_unique - df_track_data_unique['CumulativeStreams'].iloc[-366]
-            else:
-                spotify_streams_12m_unique = total_value_unique
-            
-            # Extract track name from filename
-            track_name_unique = file_unique.name.split(' - ')[1].strip()
-
-            # Add track data to summary list
-            track_summary_list.append({
-                'Track': track_name_unique,                      # Track Name
-                'First tracking date': data_start_date,          # First date with available streaming data
-                'Spotify Streams 1m': spotify_streams_1m_unique, # Last 30 days Streams
-                'Spotify Streams 3m': spotify_streams_3m_unique, # Last 90 Days Streams
-                'Spotify Streams 12m': spotify_streams_12m_unique, # Last 365 Days Streams
-                'Spotify Streams Total': total_value_unique      # Total Value
+            # Create a single row DataFrame with this track's data
+            track_data = pd.DataFrame({
+                'track_name': [track_name_unique],
+                'data_start_date': [data_start_date],
+                'track_streams_last_30days': [track_streams_last_30days],
+                'track_streams_last_90days': [track_streams_last_90days],
+                'track_streams_last_365days': [track_streams_last_365days],
+                'total_track_streams': [total_track_streams]
             })
+            
+            # Append to the summary DataFrame
+            track_summary_df = pd.concat([track_summary_df, track_data], ignore_index=True)
 
-        # 3. TRACK SUMMARY DATAFRAME CREATION
-        track_summary_df_unique = pd.DataFrame(track_summary_list)
-        df = track_summary_df_unique
+        # Use the built DataFrame
+        df = track_summary_df
 
         # 4. OWNERSHIP DATA PROCESSING
         if uploaded_file_ownership is not None:
@@ -254,7 +246,7 @@ with tab1:
         else:
             # Create empty ownership dataframe if no file is uploaded
             ownership_df = pd.DataFrame({
-                'Track': df['Track'],
+                'track_name': df['track_name'],
                 'Ownership(%)': [None] * len(df),
                 'MLC Claimed(%)': [None] * len(df)
             })
@@ -263,22 +255,8 @@ with tab1:
         # Format dates for royalty calculations
         df_additional['Date'] = pd.to_datetime(df_additional['Date'], format='%b-%y')
         
-        # Map column names to standardized internal names
-        if 'Spotify Streams 1m' in df.columns:
-            df['streams_last_month'] = df['Spotify Streams 1m']
-        if 'Spotify Streams 3m' in df.columns:
-            df['total_streams_3_months'] = df['Spotify Streams 3m']
-        if 'Spotify Streams 12m' in df.columns:
-            df['total_streams_12_months'] = df['Spotify Streams 12m']
-        if 'Spotify Streams Total' in df.columns:
-            df['historical'] = df['Spotify Streams Total']
-        if 'First tracking date' in df.columns:
-            df['data_start_date'] = df['First tracking date']  # This is actually the first available tracking date
-
-        # Clean up dataframe by removing original columns after mapping
-        columns_to_drop = ["First tracking date", "Spotify Streams 1m", "Spotify Streams 3m", "Spotify Streams 12m", "Spotify Streams Total"]
-        df.drop(columns=columns_to_drop, inplace=True)
-
+        # No need for column mapping since we're using consistent names
+        
         # 6. FORECAST PARAMETERS SETUP
         stream_influence_factor = 1000
         forecast_periods = 400
@@ -288,7 +266,7 @@ with tab1:
         st.write("Data Preview:")
         st.write(df)
 
-        songs = sorted(df['Track'].unique(), key=lambda x: x.lower())
+        songs = sorted(df['track_name'].unique(), key=lambda x: x.lower())
         selected_songs = st.multiselect('Select Songs', songs)
 
         # 8. AUDIENCE GEOGRAPHY PROCESSING
@@ -327,13 +305,13 @@ with tab1:
             # Process each selected song
             for selected_song in selected_songs:
                 # ===== 1. EXTRACT SONG DATA =====
-                song_data = df[df['Track'] == selected_song].iloc[0]
+                song_data = df[df['track_name'] == selected_song].iloc[0]
 
                 value = stream_influence_factor
-                total_streams_12_months = song_data['total_streams_12_months']
-                total_streams_3_months = song_data['total_streams_3_months']
-                streams_last_month = song_data['streams_last_month']
-                historical = song_data['historical']
+                track_streams_last_365days = song_data['track_streams_last_365days']
+                track_streams_last_90days = song_data['track_streams_last_90days']
+                track_streams_last_30days = song_data['track_streams_last_30days']
+                historical = song_data['total_track_streams']
                 data_start_date = song_data['data_start_date']
 
                 # ===== 2. UPDATE DECAY PARAMETERS =====
@@ -347,11 +325,11 @@ with tab1:
                 months_since_release_total = delta.days // 30
                 
                 # Calculate monthly averages for different time periods
-                monthly_avg_3_months = (total_streams_3_months - streams_last_month) / (2 if months_since_release_total > 2 else 1)
-                monthly_avg_last_month = streams_last_month
+                monthly_avg_3_months = (track_streams_last_90days - track_streams_last_30days) / (2 if months_since_release_total > 2 else 1)
+                monthly_avg_last_month = track_streams_last_30days
 
                 if months_since_release_total > 3:
-                    monthly_avg_12_months = (total_streams_12_months - total_streams_3_months) / (9 if months_since_release_total > 11 else (months_since_release_total - 3))
+                    monthly_avg_12_months = (track_streams_last_365days - track_streams_last_90days) / (9 if months_since_release_total > 11 else (months_since_release_total - 3))
                 else:
                     monthly_avg_12_months = monthly_avg_3_months
 
@@ -438,7 +416,7 @@ with tab1:
                 })
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
-                initial_value = streams_last_month
+                initial_value = track_streams_last_30days
                 start_period = months_since_release_total
 
                 forecasts = forecast_values(consolidated_df, initial_value, start_period, forecast_periods)
@@ -446,7 +424,7 @@ with tab1:
                 # Convert forecasts to a DataFrame
                 forecasts_df = pd.DataFrame(forecasts)
                 forecasts_df2 = forecasts_df.copy()  # Create a copy for export
-                forecasts_df2['track_name_unique'] = selected_song
+                forecasts_df2['track_name'] = selected_song
                 export_forecasts = pd.concat([export_forecasts, forecasts_df2], ignore_index=True)
                 
                 # Calculate the total forecast value for the first 240 months (20 years)
@@ -474,13 +452,13 @@ with tab1:
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
                 monthly_forecasts_df = pd.DataFrame({
-                    'Track': [selected_song] * len(forecasts_df),
-                    'Month': forecasts_df['month'],
-                    'Forecasted Value': forecasts_df['forecasted_value']
+                    'track_name': [selected_song] * len(forecasts_df),
+                    'month': forecasts_df['month'],
+                    'forecasted_value': forecasts_df['forecasted_value']
                 })
 
                 # Add month index for time-based calculations
-                monthly_forecasts_df['Month Index'] = monthly_forecasts_df.index + 1
+                monthly_forecasts_df['month_index'] = monthly_forecasts_df.index + 1
                 
                 # ===== 10. APPLY GEOGRAPHIC DISTRIBUTION =====
                 # Add country percentage distributions
@@ -499,7 +477,7 @@ with tab1:
                 # Calculate country-specific stream values
                 for index, row in audience_df.iterrows():
                     country = row['Country']
-                    monthly_forecasts_df[country + ' Value'] = monthly_forecasts_df['Forecasted Value'] * monthly_forecasts_df[country + ' %']
+                    monthly_forecasts_df[country + ' Value'] = monthly_forecasts_df['forecasted_value'] * monthly_forecasts_df[country + ' %']
 
                 # Calculate country-specific royalty values
                 for index, row in audience_df.iterrows():
@@ -518,7 +496,7 @@ with tab1:
                 monthly_forecasts_df['Total'] = monthly_forecasts_df[[country + ' Royalty Value' for country in audience_df['Country']]].sum(axis=1)
                 
                 # Apply time value of money discount
-                monthly_forecasts_df['DISC'] = (monthly_forecasts_df['Total']) / ((1 + discount_rate / 12) ** (monthly_forecasts_df['Month Index'] + 2.5))
+                monthly_forecasts_df['DISC'] = (monthly_forecasts_df['Total']) / ((1 + discount_rate / 12) ** (monthly_forecasts_df['month_index'] + 2.5))
                 
                 # Calculate total discounted and non-discounted values
                 new_forecast_value = monthly_forecasts_df['DISC'].sum()
@@ -527,19 +505,19 @@ with tab1:
 
                 # ===== 12. STORE FORECAST SUMMARY =====
                 song_forecasts.append({
-                    'Track': selected_song,
-                    'Historical': historical,
-                    'Forecast': total_forecast_value,
+                    'track_name': selected_song,
+                    'historical_streams': historical,
+                    'forecast_streams': total_forecast_value,
                     'hist_value': hist_value,
-                    'Forecast_no_disc': forecast_OG,
-                    'Forecast_disc': new_forecast_value,
-                    'Total_Value': Total_Value,
+                    'forecast_no_disc': forecast_OG,
+                    'forecast_disc': new_forecast_value,
+                    'total_value': Total_Value,
                 })
 
                 weights_and_changes.append({
-                    'Track': selected_song,
-                    'Weight': weight,
-                    'Average Percent Change': average_percent_change
+                    'track_name': selected_song,
+                    'weight': weight,
+                    'average_percent_change': average_percent_change
                 })
 
                 # ===== 13. AGGREGATE MONTHLY DATA INTO YEARLY PERIODS =====
@@ -570,13 +548,13 @@ with tab1:
 
                 # Group data by period and aggregate
                 aggregated_df = monthly_forecasts_df.groupby('Period').agg({
-                    'Track': 'first',
-                    'Month': 'first',  # First month in each period
+                    'track_name': 'first',
+                    'month': 'first',  # First month in each period
                     'DISC': 'sum'      # Sum discounted values
                 }).reset_index(drop=True)
 
                 # Rename for clarity
-                aggregated_df.rename(columns={'Month': 'Start_Month'}, inplace=True)
+                aggregated_df.rename(columns={'month': 'Start_Month'}, inplace=True)
 
                 # Keep only first 10 years
                 aggregated_df = aggregated_df.head(10)
@@ -603,7 +581,7 @@ with tab1:
 
             # ===== 15. OWNERSHIP ADJUSTMENTS =====
             # Merge forecast data with ownership information
-            merged_df = df_forecasts.merge(ownership_df[['Track', 'MLC Claimed(%)', 'Ownership(%)']], on='Track', how='left')
+            merged_df = df_forecasts.merge(ownership_df[['track_name', 'MLC Claimed(%)', 'Ownership(%)']], on='track_name', how='left')
 
             # Ensure ownership percentages are properly formatted
             merged_df['MLC Claimed(%)'] = pd.to_numeric(merged_df['MLC Claimed(%)'], errors='coerce').fillna(0)
@@ -616,21 +594,21 @@ with tab1:
             )
             
             # Adjust forecast values based on ownership percentage
-            merged_df['Forecast_no_disc'] = merged_df['Forecast_no_disc'].astype(float) * (merged_df['Ownership(%)'])
-            merged_df['Forecast_disc'] = merged_df['Forecast_disc'].astype(float) * (merged_df['Ownership(%)'])
-            merged_df['Total_Value'] = merged_df['Forecast_disc'] + merged_df['hist_value']
+            merged_df['forecast_no_disc'] = merged_df['forecast_no_disc'].astype(float) * (merged_df['Ownership(%)'])
+            merged_df['forecast_disc'] = merged_df['forecast_disc'].astype(float) * (merged_df['Ownership(%)'])
+            merged_df['total_value'] = merged_df['forecast_disc'] + merged_df['hist_value']
             merged_df = merged_df.drop(columns=['Ownership(%)', 'MLC Claimed(%)'])
             
             # ===== 16. DISPLAY FORMATTING =====
             # Format values for presentation with commas and currency symbols
             df_forecasts = merged_df
             
-            df_forecasts['Historical'] = df_forecasts['Historical'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            df_forecasts['Forecast'] = df_forecasts['Forecast'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            df_forecasts['Forecast_no_disc'] = df_forecasts['Forecast_no_disc'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['Forecast_disc'] = df_forecasts['Forecast_disc'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['historical_streams'] = df_forecasts['historical_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
+            df_forecasts['forecast_streams'] = df_forecasts['forecast_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
+            df_forecasts['forecast_no_disc'] = df_forecasts['forecast_no_disc'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['forecast_disc'] = df_forecasts['forecast_disc'].astype(float).apply(lambda x: f"${int(round(x)):,}")
             df_forecasts['hist_value'] = df_forecasts['hist_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['Total_Value'] = df_forecasts['Total_Value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['total_value'] = df_forecasts['total_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
 
             # Display the formatted forecast table
             st.write(df_forecasts)
@@ -638,12 +616,12 @@ with tab1:
             # ===== 17. SUMMARY STATISTICS =====
             # Calculate summary totals across all tracks
             sum_df = pd.DataFrame({
-                'Metric': ['hist_value', 'Forecast_OG','Forecast_dis', 'Total_Value'],
+                'Metric': ['hist_value', 'forecast_OG','forecast_dis', 'total_value'],
                 'Sum': [
                     df_forecasts['hist_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['Forecast_no_disc'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['Forecast_disc'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['Total_Value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
+                    df_forecasts['forecast_no_disc'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    df_forecasts['forecast_disc'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    df_forecasts['total_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
                 ]
             })
 
@@ -662,32 +640,32 @@ with tab1:
                 forecast_no_disc_value = monthly_forecasts_df[country + ' Royalty Value'].sum() 
                 country_breakdown.append({
                     'Country': country,
-                    'Forecast_no_disc': forecast_no_disc_value
+                    'forecast_no_disc': forecast_no_disc_value
                 })
                 
             # Process country breakdown data
             df_country_breakdown = pd.DataFrame(country_breakdown)
-            df_country_breakdown['Forecast_no_disc_numeric'] = df_country_breakdown['Forecast_no_disc'].replace({'\$': '', ',': ''}, regex=True).astype(float)
+            df_country_breakdown['forecast_no_disc_numeric'] = df_country_breakdown['forecast_no_disc'].replace({'\$': '', ',': ''}, regex=True).astype(float)
 
             # Calculate total forecast value and country percentages
-            total_forecast_no_disc_value = df_country_breakdown['Forecast_no_disc_numeric'].sum()
-            df_country_breakdown['Percentage'] = (df_country_breakdown['Forecast_no_disc_numeric'] / total_forecast_no_disc_value) * 100
+            total_forecast_no_disc_value = df_country_breakdown['forecast_no_disc_numeric'].sum()
+            df_country_breakdown['Percentage'] = (df_country_breakdown['forecast_no_disc_numeric'] / total_forecast_no_disc_value) * 100
             
             # Get top countries by revenue contribution
-            top_countries = df_country_breakdown.sort_values(by='Forecast_no_disc_numeric', ascending=False).head(10)
+            top_countries = df_country_breakdown.sort_values(by='forecast_no_disc_numeric', ascending=False).head(10)
             top_10_percentage_sum = top_countries['Percentage'].sum()
             
             # ===== 19. VISUALIZATION: TOP COUNTRIES =====
             # Create horizontal bar chart for top revenue countries
             fig, ax = plt.subplots()
             bar_color = 'teal'
-            bars = ax.barh(top_countries['Country'], top_countries['Forecast_no_disc_numeric'], color=bar_color)
+            bars = ax.barh(top_countries['Country'], top_countries['forecast_no_disc_numeric'], color=bar_color)
 
             # Configure chart appearance
             ax.set_xlabel('% of Forecast Value')
             ax.set_title(f'Top 10 Countries Contribute {top_10_percentage_sum:.1f}% to Total Forecast Value')
             ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${int(x):,}"))
-            max_value = top_countries['Forecast_no_disc_numeric'].max()
+            max_value = top_countries['forecast_no_disc_numeric'].max()
             ax.set_xlim(0, max_value * 1.25)
             ax.set_xticks([])
             
