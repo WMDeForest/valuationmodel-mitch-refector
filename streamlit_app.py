@@ -46,11 +46,11 @@ from utils.decay_models import (
     piecewise_exp_decay,
     exponential_decay,
     remove_anomalies,
-    calculate_decay_rate,
+    fit_decay_curve,
     fit_segment,
     update_fitted_params,
     forecast_values,
-    calculate_monthly_listener_decay,
+    analyze_listener_decay,
 )
 
 # ===== MODELING FUNCTIONS =====
@@ -111,8 +111,9 @@ with tab1:
                     st.warning(f"{issue} Please check your data.")
             
             # ===== UI COMPONENTS SECTION =====
-            # First get min/max dates to set up the date range slider
-            initial_results = calculate_monthly_listener_decay(df)
+            # 5. INITIAL DECAY ANALYSIS
+            # Calculate decay rates and get min/max dates for the UI slider
+            initial_results = analyze_listener_decay(df)
             min_date = initial_results['min_date']
             max_date = initial_results['max_date']
             
@@ -132,8 +133,8 @@ with tab1:
 
             if start_date and end_date:
                 # ===== CORE ANALYSIS SECTION =====
-                # 7. RUN DECAY RATE ANALYSIS 
-                results = calculate_monthly_listener_decay(df, start_date, end_date)
+                # 7. RUN DECAY RATE ANALYSIS WITH SELECTED DATE RANGE
+                results = analyze_listener_decay(df, start_date, end_date)
                 subset_df = results['subset_df']
                 mldr = results['mldr']
                 popt = results['popt']

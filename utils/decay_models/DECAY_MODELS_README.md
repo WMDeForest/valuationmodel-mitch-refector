@@ -129,4 +129,35 @@ Potential areas for model improvement:
 - Genre-specific decay patterns
 - Seasonal adjustment factors
 - Integration of marketing activity data
-- Improved handling of catalog revival events 
+- Improved handling of catalog revival events
+
+## New High-Level API
+
+For most use cases, the new high-level API function `analyze_listener_decay` (formerly `calculate_monthly_listener_decay`) is recommended:
+
+```python
+from utils.decay_models import analyze_listener_decay
+
+# Load data from any source (CSV, API, database)
+# DataFrame must have 'Date' and 'Monthly Listeners' columns
+df = load_data_from_source()
+
+# Process everything in one call
+results = analyze_listener_decay(df, sample_rate=7)  # Weekly sampling
+
+# Access results
+mldr = results['mldr']  # The Monthly Listener Decay Rate
+popt = results['popt']  # Fitted parameters for the decay function
+plot_df = results['subset_df']  # Processed data (with anomalies removed)
+min_date = results['min_date']  # Minimum date in dataset (for UI)
+max_date = results['max_date']  # Maximum date in dataset (for UI)
+```
+
+This function handles the entire workflow including:
+1. Data sampling
+2. Data sorting 
+3. Anomaly detection and removal
+4. Date range filtering
+5. Decay rate calculation
+
+It's designed to work seamlessly with data from any source, making it ideal for integration with APIs, databases, or CSV uploads. 
