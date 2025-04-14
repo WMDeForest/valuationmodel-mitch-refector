@@ -46,11 +46,14 @@ from utils.decay_models import (
     piecewise_exp_decay,
     exponential_decay,
     remove_anomalies,
-    calculate_decay_rate,
+    fit_decay_curve,
     fit_segment,
     update_fitted_params,
     forecast_values,
+    analyze_listener_decay,
 )
+
+# ===== MODELING FUNCTIONS =====
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
 # Load country population data for analyzing geographic streaming patterns
@@ -107,21 +110,14 @@ with tab1:
                 else:
                     st.warning(f"{issue} Please check your data.")
             
-            # 5. DATA SAMPLING
-            # Sample weekly data by keeping every 7th row
-            df = sample_data(df)
-            
-            # Sort data chronologically
-            df = df.sort_values(by='Date')
-
-            # 6. ANOMALY DETECTION AND REMOVAL
-            monthly_data = remove_anomalies(df)
-            
             # ===== UI COMPONENTS SECTION =====
-            # 7. DATE RANGE SELECTION INTERFACE
-            min_date = monthly_data['Date'].min().to_pydatetime()
-            max_date = monthly_data['Date'].max().to_pydatetime()
-
+            # 5. INITIAL DECAY ANALYSIS
+            # Calculate decay rates and get min/max dates for the UI slider
+            initial_results = analyze_listener_decay(df)
+            min_date = initial_results['min_date']
+            max_date = initial_results['max_date']
+            
+            # 6. DATE RANGE SELECTION
             st.write("Select Date Range:")
             start_date, end_date = st.slider(
                 "Select date range",
@@ -137,24 +133,17 @@ with tab1:
 
             if start_date and end_date:
                 # ===== CORE ANALYSIS SECTION =====
-                # 8. FILTER DATA FOR SELECTED DATE RANGE
-                mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
-                subset_df = monthly_data[mask]
-
-                # 9. PREPARE DATA FOR DECAY MODELING
-                # Calculate months since first date
-                subset_df['Months'] = subset_df['Date'].apply(
-                    lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
-                )
-
-                # 10. DECAY RATE CALCULATION
-                mldr, popt = calculate_decay_rate(subset_df)
+                # 7. RUN DECAY RATE ANALYSIS WITH SELECTED DATE RANGE
+                results = analyze_listener_decay(df, start_date, end_date)
+                subset_df = results['subset_df']
+                mldr = results['mldr']
+                popt = results['popt']
                 
                 # ===== RESULTS DISPLAY SECTION =====
-                # Show key metrics
+                # 8. SHOW METRICS
                 st.write(f'Exponential decay rate: {mldr}')
                 
-                # 11. VISUALIZATION
+                # 9. VISUALIZATION
                 fig, ax = plt.subplots(figsize=(10, 4))
                 # Plot the moving average
                 ax.plot(subset_df['Date'], subset_df['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
