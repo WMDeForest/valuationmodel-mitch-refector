@@ -235,7 +235,7 @@ with tab1:
         # Process the audience geography data to determine geographic distribution of listeners
         # This data is used to apply country-specific royalty rates in revenue projections
         # If no geography data is provided, assume 100% US market for royalty calculations
-        audience_df, percentage_usa = process_audience_geography(uploaded_file_3)
+        listener_geography_df, listener_percentage_usa = process_audience_geography(uploaded_file_3)
 
         # ===== OWNERSHIP DATA PROCESSING =====
         # Process ownership and MLC claim information to accurately calculate revenue shares
@@ -244,8 +244,6 @@ with tab1:
         ownership_df = process_ownership_data(uploaded_file_ownership, df['track_name'])
         
         # ===== DATA TRANSFORMATION FOR ANALYSIS =====
-        # Format dates for royalty calculations
-        df_additional['Date'] = pd.to_datetime(df_additional['Date'], format='%b-%y')
         
         # ===== FORECAST PARAMETERS SETUP =====
         stream_influence_factor = 1000
@@ -409,9 +407,10 @@ with tab1:
                 
                 # Adjust end date if tracking date is more recent
                 if tracking_start_date.strftime('%Y-%m') >= end_date:
-                    end_date = df_additional['Date'].max().strftime('%Y-%m')
+                    end_date = df_additional['Date'].max()
                     
                 # Filter mechanical royalty data for relevant date range
+                # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
                 mask = (df_additional['Date'] >= start_date) & (df_additional['Date'] <= end_date)
                 
                 # Calculate historical value from streams
@@ -419,7 +418,7 @@ with tab1:
                 premium = df_additional.loc[mask, 'Spotify_Premium'].mean()
                 hist_ad = 0.6 * historical * ad_supported
                 hist_prem = 0.4 * historical * premium
-                hist_value = (hist_ad + hist_prem) * (percentage_usa)
+                hist_value = (hist_ad + hist_prem) * (listener_percentage_usa)
                 hist_value = hist_value / ((1 + discount_rate / 12) ** 3)  # Apply time value discount
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
@@ -434,38 +433,38 @@ with tab1:
                 
                 # ===== 10. APPLY GEOGRAPHIC DISTRIBUTION =====
                 # Add country percentage distributions
-                for index, row in audience_df.iterrows():
+                for index, row in listener_geography_df.iterrows():
                     country = row['Country']
                     percentage = row['Spotify monthly listeners (%)']
                     monthly_forecasts_df[country + ' %'] = percentage
 
                 # Get country-specific royalty rates
-                for index, row in audience_df.iterrows():
+                for index, row in listener_geography_df.iterrows():
                     country = row['Country']
                     if country in GLOBAL.columns:
                         mean_final_5 = GLOBAL[country].dropna().tail(5).mean()
                         monthly_forecasts_df[country + ' Royalty Rate'] = mean_final_5
 
                 # Calculate country-specific stream values
-                for index, row in audience_df.iterrows():
+                for index, row in listener_geography_df.iterrows():
                     country = row['Country']
                     monthly_forecasts_df[country + ' Value'] = monthly_forecasts_df['forecasted_value'] * monthly_forecasts_df[country + ' %']
 
                 # Calculate country-specific royalty values
-                for index, row in audience_df.iterrows():
+                for index, row in listener_geography_df.iterrows():
                     country = row['Country']
                     monthly_forecasts_df[country + ' Royalty Value'] = monthly_forecasts_df[country + ' Value'] * monthly_forecasts_df[country + ' Royalty Rate']
 
                 # Clean up intermediate calculation columns
-                percentage_columns = [country + ' %' for country in audience_df['Country']]
+                percentage_columns = [country + ' %' for country in listener_geography_df['Country']]
                 monthly_forecasts_df.drop(columns=percentage_columns, inplace=True)
                 
-                columns_to_drop = [country + ' Value' for country in audience_df['Country']] + [country + ' Royalty Rate' for country in audience_df['Country']]
+                columns_to_drop = [country + ' Value' for country in listener_geography_df['Country']] + [country + ' Royalty Rate' for country in listener_geography_df['Country']]
                 monthly_forecasts_df.drop(columns=columns_to_drop, inplace=True)
                 
                 # ===== 11. CALCULATE TOTAL FORECAST VALUE =====
                 # Sum all country royalty values
-                monthly_forecasts_df['Total'] = monthly_forecasts_df[[country + ' Royalty Value' for country in audience_df['Country']]].sum(axis=1)
+                monthly_forecasts_df['Total'] = monthly_forecasts_df[[country + ' Royalty Value' for country in listener_geography_df['Country']]].sum(axis=1)
                 
                 # Apply time value of money discount
                 monthly_forecasts_df['DISC'] = (monthly_forecasts_df['Total']) / ((1 + discount_rate / 12) ** (monthly_forecasts_df['month_index'] + 2.5))
@@ -607,7 +606,7 @@ with tab1:
             # ===== 18. GEOGRAPHIC DISTRIBUTION ANALYSIS =====
             # Extract country-specific revenue data
             country_breakdown = []
-            for index, row in audience_df.iterrows():
+            for index, row in listener_geography_df.iterrows():
                 country = row['Country']
                 forecast_no_disc_value = monthly_forecasts_df[country + ' Royalty Value'].sum() 
                 country_breakdown.append({
@@ -676,7 +675,7 @@ with tab1:
 
             # ===== 21. FRAUD DETECTION =====
             # Cross-reference audience data with population data
-            warning_df = pd.merge(audience_df, population_df, on='Country', how='left')
+            warning_df = pd.merge(listener_geography_df, population_df, on='Country', how='left')
             
             # Calculate threshold for suspicious activity (20% of population)
             warning_df['TwentyPercentPopulation'] = warning_df['Population'] * 0.20
