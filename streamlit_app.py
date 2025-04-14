@@ -188,29 +188,32 @@ with tab1:
         for file_unique in uploaded_files_unique:
             # Read the track data CSV
             df_track_data_unique = pd.read_csv(file_unique)
+            
+            # Rename the 'Value' column to a more descriptive name
+            df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
 
             # Extract the first available date from the track data
             data_start_date = extract_earliest_date(df_track_data_unique, 'Date')
 
             # Get total streams (most recent cumulative value)
-            total_value_unique = df_track_data_unique['Value'].iloc[-1]
+            total_value_unique = df_track_data_unique['CumulativeStreams'].iloc[-1]
 
             # Calculate period-specific stream counts
             # Last 30 days streams 
             if len(df_track_data_unique) > 30:
-                spotify_streams_1m_unique = total_value_unique - df_track_data_unique['Value'].iloc[-31]
+                spotify_streams_1m_unique = total_value_unique - df_track_data_unique['CumulativeStreams'].iloc[-31]
             else:
                 spotify_streams_1m_unique = total_value_unique
             
             # Last 90 days streams
             if len(df_track_data_unique) > 90:
-                spotify_streams_3m_unique = total_value_unique - df_track_data_unique['Value'].iloc[-91]
+                spotify_streams_3m_unique = total_value_unique - df_track_data_unique['CumulativeStreams'].iloc[-91]
             else:
                 spotify_streams_3m_unique = total_value_unique
             
             # Last 12 months streams (last 365 days)
             if len(df_track_data_unique) > 365:
-                spotify_streams_12m_unique = total_value_unique - df_track_data_unique['Value'].iloc[-366]
+                spotify_streams_12m_unique = total_value_unique - df_track_data_unique['CumulativeStreams'].iloc[-366]
             else:
                 spotify_streams_12m_unique = total_value_unique
             
