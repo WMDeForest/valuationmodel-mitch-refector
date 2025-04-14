@@ -195,13 +195,13 @@ with tab1:
             total_value_unique = df_track_data_unique['Value'].iloc[-1]
 
             # Calculate period-specific stream counts
-            # Last month streams (last 30 days)
+            # Last 30 days streams 
             if len(df_track_data_unique) > 30:
                 spotify_streams_1m_unique = total_value_unique - df_track_data_unique['Value'].iloc[-31]
             else:
                 spotify_streams_1m_unique = total_value_unique
             
-            # Last 3 months streams (last 90 days)
+            # Last 90 days streams
             if len(df_track_data_unique) > 90:
                 spotify_streams_3m_unique = total_value_unique - df_track_data_unique['Value'].iloc[-91]
             else:
@@ -220,7 +220,7 @@ with tab1:
             track_summary_list.append({
                 'Track': track_name_unique,                      # Track Name
                 'Release date': release_date_unique,             # Release Date
-                'Spotify Streams 1m': spotify_streams_1m_unique, # Last Month Streams
+                'Spotify Streams 1m': spotify_streams_1m_unique, # Last 30 days Streams
                 'Spotify Streams 3m': spotify_streams_3m_unique, # Last 90 Days Streams
                 'Spotify Streams 12m': spotify_streams_12m_unique, # Last 365 Days Streams
                 'Spotify Streams Total': total_value_unique      # Total Value
