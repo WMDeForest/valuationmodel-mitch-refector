@@ -243,8 +243,6 @@ with tab1:
         # If no ownership data is provided, assume 100% ownership and 0% MLC claims
         ownership_df = process_ownership_data(uploaded_file_ownership, df['track_name'])
         
-        # ===== DATA TRANSFORMATION FOR ANALYSIS =====
-        
         # ===== FORECAST PARAMETERS SETUP =====
         stream_influence_factor = 1000
         forecast_periods = 400
