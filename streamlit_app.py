@@ -43,6 +43,8 @@ from utils.decay_rates import (
     fitted_params,
     fitted_params_df,
     breakpoints,
+    DEFAULT_STREAM_INFLUENCE_FACTOR,
+    DEFAULT_FORECAST_PERIODS
 )
 
 # Import decay model functions from the new modules
@@ -227,10 +229,6 @@ with tab1:
             # Each time through the loop, we add one more row to the catalog
             track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
 
-        # Set our main working DataFrame to be the catalog we've built
-        # This DataFrame will be used throughout the rest of the application
-        df = track_catalog_df
-
         # ===== AUDIENCE GEOGRAPHY PROCESSING =====
         # Process the audience geography data to determine geographic distribution of listeners
         # This data is used to apply country-specific royalty rates in revenue projections
@@ -241,19 +239,14 @@ with tab1:
         # Process ownership and MLC claim information to accurately calculate revenue shares
         # This ensures all calculations account for partial ownership and existing royalty claims
         # If no ownership data is provided, assume 100% ownership and 0% MLC claims
-        ownership_df = process_ownership_data(uploaded_file_ownership, df['track_name'])
+        ownership_df = process_ownership_data(uploaded_file_ownership, track_catalog_df['track_name'])
         
-        # ===== FORECAST PARAMETERS SETUP =====
-        stream_influence_factor = 1000
-        forecast_periods = 400
-        current_date = datetime.today()
-
         # ===== UI DISPLAY AND TRACK SELECTION =====
         st.write("Data Preview:")
-        st.write(df)
+        st.write(track_catalog_df)
 
-        songs = sorted(df['track_name'].unique(), key=lambda x: x.lower())
-        selected_songs = st.multiselect('Select Songs', songs)
+        songs = sorted(track_catalog_df['track_name'].unique(), key=lambda x: x.lower())
+        selected_songs = st.multiselect('Select Songs', songs, default=songs)
         
         # ===== FINANCIAL PARAMETERS =====
         # Positioned here just before forecasting calculations
@@ -273,9 +266,9 @@ with tab1:
             # Process each selected song
             for selected_song in selected_songs:
                 # ===== 1. EXTRACT SONG DATA =====
-                song_data = df[df['track_name'] == selected_song].iloc[0]
+                song_data = track_catalog_df[track_catalog_df['track_name'] == selected_song].iloc[0]
 
-                value = stream_influence_factor
+                value = DEFAULT_STREAM_INFLUENCE_FACTOR
                 track_streams_last_365days = song_data['track_streams_last_365days']
                 track_streams_last_90days = song_data['track_streams_last_90days']
                 track_streams_last_30days = song_data['track_streams_last_30days']
@@ -283,13 +276,13 @@ with tab1:
                 data_start_date = song_data['data_start_date']
 
                 # ===== 2. UPDATE DECAY PARAMETERS =====
-                updated_fitted_params_df = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
+                updated_fitted_params_df = update_fitted_params(fitted_params_df, DEFAULT_STREAM_INFLUENCE_FACTOR, sp_range, SP_REACH)
                 if updated_fitted_params_df is not None:
                     updated_fitted_params = updated_fitted_params_df.to_dict(orient='records')
 
                 # ===== 3. CALCULATE TIME SINCE RELEASE AND AVERAGE STREAMS =====
                 tracking_start_date = datetime.strptime(data_start_date, "%d/%m/%Y")
-                delta = current_date - tracking_start_date
+                delta = datetime.today() - tracking_start_date
                 months_since_release_total = delta.days // 30
                 
                 # Calculate monthly averages for different time periods
@@ -387,7 +380,7 @@ with tab1:
                 initial_value = track_streams_last_30days
                 start_period = months_since_release_total
 
-                forecasts = forecast_values(consolidated_df, initial_value, start_period, forecast_periods)
+                forecasts = forecast_values(consolidated_df, initial_value, start_period, DEFAULT_FORECAST_PERIODS)
 
                 # Convert forecasts to a DataFrame
                 forecasts_df = pd.DataFrame(forecasts)
