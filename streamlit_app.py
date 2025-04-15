@@ -227,7 +227,11 @@ with tab1:
             df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
 
             # Get the first date from the data (not necessarily release date, just first tracking date)
-            data_start_date = extract_earliest_date(df_track_data_unique, 'Date')
+            earliest_track_date = extract_earliest_date(df_track_data_unique, 'Date')
+            
+            # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for later use with mechanical royalty data
+            earliest_track_datetime = datetime.strptime(earliest_track_date, "%d/%m/%Y")
+            earliest_track_date_formatted = earliest_track_datetime.strftime('%Y-%m')
 
             # Extract the latest (most recent) cumulative stream count
             total_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
@@ -239,7 +243,7 @@ with tab1:
             track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
             
             # Pre-calculate time-based metrics to avoid recalculating after Run All button
-            months_since_release_total = calculate_months_since_release(data_start_date)
+            months_since_release_total = calculate_months_since_release(earliest_track_date)
             
             # Calculate monthly averages for different time periods
             avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
@@ -260,7 +264,8 @@ with tab1:
             # Create a single row DataFrame containing all key metrics for this track
             track_data = pd.DataFrame({
                 'track_name': [track_name_unique],
-                'data_start_date': [data_start_date],
+                'earliest_track_date_formatted': [earliest_track_date_formatted],
+                'earliest_track_date': [earliest_track_date],  # Keep original format for any other uses
                 'track_streams_last_30days': [track_streams_last_30days],
                 'track_streams_last_90days': [track_streams_last_90days],
                 'track_streams_last_365days': [track_streams_last_365days],
@@ -315,8 +320,13 @@ with tab1:
                 track_streams_last_90days = song_data['track_streams_last_90days']
                 track_streams_last_30days = song_data['track_streams_last_30days']
                 historical = song_data['total_track_streams']
-                data_start_date = song_data['data_start_date']
-
+                
+                # Get both date formats - we need raw format for months calculation
+                earliest_track_date = song_data['earliest_track_date']  # Original DD/MM/YYYY format
+                
+                # Pre-calculate months since release using original date format
+                months_since_release_total = calculate_months_since_release(earliest_track_date)
+                
                 # ===== 2. UPDATE DECAY PARAMETERS =====
                 # Get both DataFrame and dictionary formats of decay parameters
                 decay_rates_df, updated_fitted_params = get_decay_parameters(
@@ -372,28 +382,27 @@ with tab1:
                 # ===== 7. GENERATE STREAM FORECASTS =====
                 track_streams_forecast = forecast_track_streams(segmented_track_decay_rates_df, track_streams_last_30days, song_data['months_since_release_total'], DEFAULT_FORECAST_PERIODS)
 
-                # Convert forecasts to a DataFrame - the column contains predictions for each future month
+                # Convert forecasts to a DataFrame - the column contains streapredictions for each future month
                 track_streams_forecast_df = pd.DataFrame(track_streams_forecast)
                 track_streams_forecast_df2 = track_streams_forecast_df.copy()  # Create a copy for export
                 track_streams_forecast_df2['track_name'] = selected_song #add track name to the dataframe for export
                 export_track_streams_forecast = pd.concat([export_track_streams_forecast, track_streams_forecast_df2], ignore_index=True)
                 
                 # Calculate the total predicted streams for the forecast period
-                forecast_months = DEFAULT_FORECAST_YEARS * 12
-                total_track_streams_forecast = track_streams_forecast_df.loc[:forecast_months, 'predicted_streams_for_month'].sum()
+                track_valuation_months = DEFAULT_FORECAST_YEARS * 12
+                total_track_streams_forecast = track_streams_forecast_df.loc[:track_valuation_months, 'predicted_streams_for_month'].sum()
 
                 # ===== 8. CALCULATE HISTORICAL VALUE =====
-                tracking_start_date = datetime.strptime(data_start_date, "%d/%m/%Y")
-                start_date = tracking_start_date.strftime('%Y-%m')
+                # Use the pre-formatted date directly from song_data
                 end_date = '2024-02'  # Default end date
                 
                 # Adjust end date if tracking date is more recent
-                if tracking_start_date.strftime('%Y-%m') >= end_date:
+                if song_data['earliest_track_date_formatted'] >= end_date:
                     end_date = df_additional['Date'].max()
                     
                 # Filter mechanical royalty data for relevant date range
                 # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
-                mask = (df_additional['Date'] >= start_date) & (df_additional['Date'] <= end_date)
+                mask = (df_additional['Date'] >= song_data['earliest_track_date_formatted']) & (df_additional['Date'] <= end_date)
                 
                 # Calculate historical value from streams
                 ad_supported = df_additional.loc[mask, 'Spotify_Ad-supported'].mean()
