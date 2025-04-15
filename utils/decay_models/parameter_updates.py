@@ -110,18 +110,18 @@ def get_decay_parameters(fitted_params_df, stream_influence_factor, sp_range, sp
     
     return None, None 
 
-def generate_track_decay_rates_by_month(decay_rates_df, breakpoints, forecast_horizon=500):
+def generate_track_decay_rates_by_month(decay_rates_df, segment_boundaries, forecast_horizon=500):
     """
     Generate a list of track-specific decay rates for each month in the forecast horizon.
     
     This function creates a comprehensive mapping of decay rates for each month
-    in the forecast period, based on the segmentation defined by breakpoints.
+    in the forecast period, based on the segmentation defined by segment_boundaries.
     Different segments of a track's lifespan may have different decay rate patterns.
     
     Args:
         decay_rates_df: DataFrame containing decay rates by segment
                        Must have 'k' column with decay rate values
-        breakpoints: List of month numbers that define the segments
+        segment_boundaries: List of month numbers that define the segments
                    For example, [1, 6, 12, 24, 60, 500] defines 5 segments
         forecast_horizon: Maximum number of months to generate rates for
                          Default is 500 months (approx. 41.7 years)
@@ -130,7 +130,7 @@ def generate_track_decay_rates_by_month(decay_rates_df, breakpoints, forecast_ho
         list: List of track decay rates, with one value per month up to forecast_horizon
     
     Notes:
-        - The function finds which segment each month belongs to based on breakpoints
+        - The function finds which segment each month belongs to based on segment_boundaries
         - It then assigns the appropriate decay rate from decay_rates_df to that month
         - This creates a month-by-month mapping of decay rates for the entire forecast period
     """
@@ -140,9 +140,9 @@ def generate_track_decay_rates_by_month(decay_rates_df, breakpoints, forecast_ho
     
     # For each month, determine its segment and assign the appropriate decay rate
     for month in all_forecast_months:
-        for i in range(len(breakpoints) - 1):
+        for i in range(len(segment_boundaries) - 1):
             # Check if the month falls within this segment's range
-            if breakpoints[i] <= month < breakpoints[i + 1]:
+            if segment_boundaries[i] <= month < segment_boundaries[i + 1]:
                 # Assign the decay rate from the corresponding segment
                 segment_decay_rate = decay_rates_df.loc[i, 'k']
                 monthly_decay_rates.append(segment_decay_rate)
@@ -300,19 +300,19 @@ def adjust_track_decay_rates(track_decay_df, track_decay_k=None):
     
     return adjusted_df, adjustment_info
 
-def calculate_track_decay_rates_by_segment(adjusted_df, breakpoints):
+def calculate_track_decay_rates_by_segment(adjusted_df, segment_boundaries):
     """
-    Calculate average decay rates for each segment defined by breakpoints.
+    Calculate average decay rates for each segment defined by segment_boundaries.
     
     This function divides the forecast period into segments based on the provided
-    breakpoints, and calculates the average decay rate within each segment.
+    segment_boundaries, and calculates the average decay rate within each segment.
     This allows for simplified modeling while respecting the different decay
     behaviors at different stages of a track's lifecycle.
     
     Args:
         adjusted_df: DataFrame with months and adjusted decay rates
                     Must contain 'months_since_release' and 'final_adjusted_decay_rate' columns
-        breakpoints: List of month numbers that define segment boundaries
+        segment_boundaries: List of month numbers that define segment boundaries
                     For example, [1, 6, 12, 24, 60, 500] defines 5 segments
     
     Returns:
@@ -320,7 +320,7 @@ def calculate_track_decay_rates_by_segment(adjusted_df, breakpoints):
                          Contains 'segment' and 'k' columns
     
     Notes:
-        - Each segment spans from one breakpoint (inclusive) to the next (exclusive)
+        - Each segment spans from one boundary (inclusive) to the next (exclusive)
         - The function calculates the average decay rate within each segment
         - This consolidated representation is used for efficient forecasting
     """
@@ -329,11 +329,11 @@ def calculate_track_decay_rates_by_segment(adjusted_df, breakpoints):
     segments = []
     avg_decay_rates = []
 
-    # Process each segment defined by the breakpoints
-    for i in range(len(breakpoints) - 1):
+    # Process each segment defined by the boundaries
+    for i in range(len(segment_boundaries) - 1):
         # Define segment boundaries
-        start_month = breakpoints[i]
-        end_month = breakpoints[i + 1] - 1
+        start_month = segment_boundaries[i]
+        end_month = segment_boundaries[i + 1] - 1
         
         # Extract data for this segment
         segment_data = adjusted_df[(adjusted_df['months_since_release'] >= start_month) & 

@@ -45,7 +45,7 @@ from utils.decay_rates import (
     SP_REACH,
     fitted_params,
     fitted_params_df,
-    breakpoints,
+    track_lifecycle_segment_boundaries,
     DEFAULT_STREAM_INFLUENCE_FACTOR,
     DEFAULT_FORECAST_PERIODS
 )
@@ -337,7 +337,7 @@ with tab1:
                 # Generate track-specific decay rates for all forecast months 
                 # These rates model how this individual track's streams will decline over time,
                 # distinct from the artist-level decay rates calculated in the previous section
-                track_monthly_decay_rates = generate_track_decay_rates_by_month(decay_rates_df, breakpoints)
+                track_monthly_decay_rates = generate_track_decay_rates_by_month(decay_rates_df, track_lifecycle_segment_boundaries)
                 
                 # Determine the observed time range from the track's streaming data
                 track_data_start_month = min(track_months_since_release)
@@ -366,7 +366,7 @@ with tab1:
                 
                 # ===== 6. SEGMENT DECAY RATES BY TIME PERIOD =====
                 # Calculate average decay rates for each segment
-                segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(adjusted_track_decay_df, breakpoints)
+                segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(adjusted_track_decay_df, track_lifecycle_segment_boundaries)
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
                 initial_value = track_streams_last_30days

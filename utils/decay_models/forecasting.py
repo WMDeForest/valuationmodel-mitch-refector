@@ -6,7 +6,7 @@ fitted decay parameters. It handles the complex logic of applying different
 decay rates to different time segments in a track's lifetime.
 """
 import numpy as np
-from utils.decay_rates import breakpoints
+from utils.decay_rates import track_lifecycle_segment_boundaries
 
 def forecast_values(consolidated_df, initial_value, start_period, forecast_periods):
     """
@@ -39,7 +39,7 @@ def forecast_values(consolidated_df, initial_value, start_period, forecast_perio
              - 'time_used': Forecasting period (1 = first forecast month, etc.)
     
     Notes:
-        The breakpoints imported from utils.decay_rates define the boundaries
+        The track_lifecycle_segment_boundaries imported from utils.decay_rates define the boundaries
         between different time segments (e.g., 1-3 months, 4-12 months, etc.).
         
         For each forecast month, the function:
@@ -62,8 +62,8 @@ def forecast_values(consolidated_df, initial_value, start_period, forecast_perio
         
         # Determine which segment applies to the current month
         # This complex calculation finds which segment the current month belongs to
-        # based on the breakpoints defined in the decay_rates module
-        while current_month >= sum(len(range(breakpoints[j] + 1, breakpoints[j + 1] + 1)) 
+        # based on the segment boundaries defined in the decay_rates module
+        while current_month >= sum(len(range(track_lifecycle_segment_boundaries[j] + 1, track_lifecycle_segment_boundaries[j + 1] + 1)) 
                                  for j in range(current_segment + 1)):
             current_segment += 1
             
