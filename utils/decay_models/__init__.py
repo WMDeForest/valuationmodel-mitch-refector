@@ -52,7 +52,7 @@ forecasts = forecast_values(params_df, initial_value, start_period, periods)
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
 from utils.decay_models.preprocessing import remove_anomalies
 from utils.decay_models.fitting import fit_decay_curve, fit_segment, analyze_listener_decay
-from utils.decay_models.parameter_updates import update_fitted_params
+from utils.decay_models.parameter_updates import update_fitted_params, get_decay_parameters
 from utils.decay_models.forecasting import forecast_values
 
 # For backward compatibility
@@ -66,6 +66,7 @@ __all__ = [
     'analyze_listener_decay',
     'fit_segment',
     'update_fitted_params',
+    'get_decay_parameters',
     'forecast_values',
     # For backward compatibility
     'calculate_decay_rate',

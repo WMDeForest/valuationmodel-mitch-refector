@@ -64,3 +64,48 @@ def update_fitted_params(fitted_params_df, value, sp_range, SP_REACH):
     updated_fitted_params_df['k'] = updated_fitted_params_df['k'] * 0.67 + column_to_append * 0.33
 
     return updated_fitted_params_df 
+
+def get_decay_parameters(fitted_params_df, stream_influence_factor, sp_range, sp_reach):
+    """
+    Get decay parameters in both DataFrame and dictionary formats.
+    
+    This is a comprehensive function that returns both the updated parameters DataFrame
+    and the dictionary (records) representation in a single call. It can be used with
+    data from any source (API, CSV, database) as long as the fitted_params_df is provided
+    in the expected format.
+    
+    Args:
+        fitted_params_df: DataFrame with initial fitted parameters
+        stream_influence_factor: Numeric measure of external streaming influence
+        sp_range: DataFrame with ranges for segmentation
+        sp_reach: DataFrame with adjustment factors for different influence levels
+        
+    Returns:
+        tuple: (updated_params_df, updated_params_dict) where:
+               - updated_params_df is the DataFrame with updated parameters
+               - updated_params_dict is the list of dictionaries (records format)
+               
+               Returns (None, None) if parameters could not be updated
+    
+    Usage:
+        # Get both formats:
+        df, dict_format = get_decay_parameters(...)
+        
+        # Get only DataFrame:
+        df, _ = get_decay_parameters(...)
+        
+        # Get only dictionary:
+        _, dict_format = get_decay_parameters(...)
+    """
+    updated_params_df = update_fitted_params(
+        fitted_params_df, 
+        stream_influence_factor, 
+        sp_range, 
+        sp_reach
+    )
+    
+    if updated_params_df is not None:
+        updated_params_dict = updated_params_df.to_dict(orient='records')
+        return updated_params_df, updated_params_dict
+    
+    return None, None 
