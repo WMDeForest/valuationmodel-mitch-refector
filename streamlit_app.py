@@ -82,6 +82,9 @@ from utils.financial_parameters import (
     HISTORICAL_VALUE_TIME_ADJUSTMENT
 )
 
+# Define cutoff date for historical valuations
+HISTORICAL_VALUATION_CUTOFF = '2024-02'
+
 # ===== MODELING FUNCTIONS =====
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
@@ -393,12 +396,13 @@ with tab1:
                 total_track_streams_forecast = track_streams_forecast_df.loc[:track_valuation_months, 'predicted_streams_for_month'].sum()
 
                 # ===== 8. CALCULATE HISTORICAL VALUE =====
-                # Use the pre-formatted date directly from song_data
-                end_date = '2024-02'  # Default end date
-                
-                # Adjust end date if tracking date is more recent
-                if song_data['earliest_track_date_formatted'] >= end_date:
+                # Determine the end date for royalty rate calculations
+                # For older tracks, use the valuation cutoff date
+                # For newer tracks, use the latest available data
+                if song_data['earliest_track_date_formatted'] >= HISTORICAL_VALUATION_CUTOFF:
                     end_date = df_additional['Date'].max()
+                else:
+                    end_date = HISTORICAL_VALUATION_CUTOFF
                     
                 # Filter mechanical royalty data for relevant date range
                 # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
