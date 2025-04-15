@@ -256,7 +256,7 @@ with tab1:
         
         # ===== FINANCIAL PARAMETERS =====
         # Positioned here just before forecasting calculations
-        discount_rate = st.number_input('Discount Rate (%)', min_value=0.00, max_value=10.00, value=0.00, step=0.01, format="%.2f")/100
+        discount_rate = display_financial_parameters_ui()
 
         # ===== INITIALIZE RESULTS STORAGE FOR FORECAST CALCULATIONS =====
         song_forecasts = []
