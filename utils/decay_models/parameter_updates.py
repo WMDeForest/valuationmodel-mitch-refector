@@ -64,3 +64,289 @@ def update_fitted_params(fitted_params_df, value, sp_range, SP_REACH):
     updated_fitted_params_df['k'] = updated_fitted_params_df['k'] * 0.67 + column_to_append * 0.33
 
     return updated_fitted_params_df 
+
+def get_decay_parameters(fitted_params_df, stream_influence_factor, sp_range, sp_reach):
+    """
+    Get decay parameters in both DataFrame and dictionary formats.
+    
+    This is a comprehensive function that returns both the updated parameters DataFrame
+    and the dictionary (records) representation in a single call. It can be used with
+    data from any source (API, CSV, database) as long as the fitted_params_df is provided
+    in the expected format.
+    
+    Args:
+        fitted_params_df: DataFrame with initial fitted parameters
+        stream_influence_factor: Numeric measure of external streaming influence
+        sp_range: DataFrame with ranges for segmentation
+        sp_reach: DataFrame with adjustment factors for different influence levels
+        
+    Returns:
+        tuple: (updated_params_df, updated_params_dict) where:
+               - updated_params_df is the DataFrame with updated parameters
+               - updated_params_dict is the list of dictionaries (records format)
+               
+               Returns (None, None) if parameters could not be updated
+    
+    Usage:
+        # Get both formats:
+        df, dict_format = get_decay_parameters(...)
+        
+        # Get only DataFrame:
+        df, _ = get_decay_parameters(...)
+        
+        # Get only dictionary:
+        _, dict_format = get_decay_parameters(...)
+    """
+    updated_params_df = update_fitted_params(
+        fitted_params_df, 
+        stream_influence_factor, 
+        sp_range, 
+        sp_reach
+    )
+    
+    if updated_params_df is not None:
+        updated_params_dict = updated_params_df.to_dict(orient='records')
+        return updated_params_df, updated_params_dict
+    
+    return None, None 
+
+def generate_decay_rates_by_month(decay_rates_df, breakpoints, forecast_horizon=500):
+    """
+    Generate a list of decay rates for each month in the forecast horizon based on breakpoints.
+    
+    This function creates a comprehensive mapping of decay rates for each month
+    in the forecast period, based on the segmentation defined by breakpoints.
+    Different segments of a track's lifespan may have different decay rate patterns.
+    
+    Args:
+        decay_rates_df: DataFrame containing decay rates by segment
+                       Must have 'k' column with decay rate values
+        breakpoints: List of month numbers that define the segments
+                   For example, [1, 6, 12, 24, 60, 500] defines 5 segments
+        forecast_horizon: Maximum number of months to generate rates for
+                         Default is 500 months (approx. 41.7 years)
+    
+    Returns:
+        list: List of decay rates, with one value per month up to forecast_horizon
+    
+    Notes:
+        - The function finds which segment each month belongs to based on breakpoints
+        - It then assigns the appropriate decay rate from decay_rates_df to that month
+        - This creates a month-by-month mapping of decay rates for the entire forecast period
+    """
+    # Create a list for all months in the forecast horizon
+    all_forecast_months = list(range(1, forecast_horizon + 1))
+    monthly_decay_rates = []
+    
+    # For each month, determine its segment and assign the appropriate decay rate
+    for month in all_forecast_months:
+        for i in range(len(breakpoints) - 1):
+            # Check if the month falls within this segment's range
+            if breakpoints[i] <= month < breakpoints[i + 1]:
+                # Assign the decay rate from the corresponding segment
+                segment_decay_rate = decay_rates_df.loc[i, 'k']
+                monthly_decay_rates.append(segment_decay_rate)
+                break
+                
+    return monthly_decay_rates
+
+def create_decay_rate_dataframe(months_since_release, monthly_decay_rates, observed_decay_rate=None, 
+                             observed_start_month=None, observed_end_month=None):
+    """
+    Create a DataFrame with months since release and corresponding decay rates.
+    
+    This function creates a structured DataFrame for all decay rate data,
+    including both model-derived rates and observed rates from actual data.
+    The DataFrame provides a foundation for further adjustments and analysis.
+    
+    Args:
+        months_since_release: List of integers representing months in the forecast
+        monthly_decay_rates: List of decay rates corresponding to each month
+        observed_decay_rate: Optional decay rate observed from actual data
+        observed_start_month: Start month of the observation period
+        observed_end_month: End month of the observation period
+    
+    Returns:
+        pandas.DataFrame: DataFrame with months and corresponding decay rates
+                         Includes columns for both model and observed rates
+    
+    Notes:
+        - When observed data is provided, the function adds the observed decay rate
+          to the months that fall within the observation period
+        - This allows comparison between model-predicted decay and actual decay
+    """
+    import pandas as pd
+    
+    # Create the basic DataFrame with months and model-derived decay rates
+    decay_df = pd.DataFrame({
+        'months_since_release': months_since_release,
+        'decay_rate': monthly_decay_rates
+    })
+    
+    # If observed decay rate is provided, add it to the appropriate months
+    if observed_decay_rate is not None and observed_start_month is not None and observed_end_month is not None:
+        # Add column for observed decay rate (mldr = measured listener decay rate)
+        decay_df['mldr'] = None
+        
+        # Apply observed decay rate to the period where we have actual data
+        decay_df.loc[(decay_df['months_since_release'] >= observed_start_month) & 
+                    (decay_df['months_since_release'] <= observed_end_month), 'mldr'] = observed_decay_rate
+    
+    return decay_df 
+
+def adjust_decay_rates_with_observed_data(decay_df, fit_parameter_k=None):
+    """
+    Adjust theoretical decay rates using observed data for more accurate forecasting.
+    
+    This function performs a two-step adjustment process:
+    1. First adjustment: Analyzes difference between theoretical and observed decay rates
+       and applies a weighted adjustment based on the direction of difference
+    2. Second adjustment: Compares the first adjustment with fitted decay rates from actual
+       streaming data and applies another weighted adjustment
+    
+    The weighting approach helps balance theoretical models with real-world behavior.
+    
+    Args:
+        decay_df: DataFrame with months and corresponding decay rates
+                 Must contain 'decay_rate' column and optionally 'mldr' column
+        fit_parameter_k: Decay rate parameter from exponential curve fitting
+                        Only used for second-level adjustment if provided
+    
+    Returns:
+        pandas.DataFrame: DataFrame with adjusted decay rates
+                         Contains additional columns for diagnostic information
+    
+    Notes:
+        - Positive differences (observed > theoretical) lead to adjustments
+          that slow the decay, extending lifetime value
+        - The function applies weighting to prevent extreme adjustments
+        - Clean-up is performed to remove intermediate calculation columns
+    """
+    # Deep copy to avoid modifying the original DataFrame
+    adjusted_df = decay_df.copy()
+    
+    # First adjustment: Compare observed vs. theoretical decay rates
+    if 'mldr' in adjusted_df.columns:
+        # Calculate percentage difference between observed and theoretical decay
+        adjusted_df['percent_change'] = ((adjusted_df['mldr'] - adjusted_df['decay_rate']) / 
+                                         adjusted_df['decay_rate']) * 100
+        
+        # Calculate the average percentage change across observed months
+        average_percent_change = adjusted_df['percent_change'].dropna().mean()
+        
+        # Apply weighting based on direction of change
+        # Positive changes (slower decay) are given more weight than negative changes
+        if average_percent_change > 0:
+            adjustment_weight = min(1, max(0, average_percent_change / 100))
+        else:
+            adjustment_weight = 0
+        
+        # Apply first level of adjustment to decay rates
+        adjusted_df['adjusted_decay_rate'] = (adjusted_df['decay_rate'] * 
+                                             (1 + (average_percent_change * adjustment_weight) / 100))
+    else:
+        # If no observed data, keep original decay rates
+        adjusted_df['adjusted_decay_rate'] = adjusted_df['decay_rate']
+        adjustment_weight = 0
+        average_percent_change = 0
+    
+    # Second adjustment: If fitted parameter is available, apply another adjustment
+    if fit_parameter_k is not None and 'mldr' in adjusted_df.columns:
+        # Get indices of months with observed data
+        observed_months_mask = ~adjusted_df['mldr'].isna()
+        
+        # Add fitted decay rate to observed period
+        adjusted_df.loc[observed_months_mask, 'new_decay_rate'] = fit_parameter_k
+        
+        # Compare adjusted decay rate with newly fitted rate
+        adjusted_df['percent_change_new_vs_adjusted'] = ((adjusted_df['new_decay_rate'] - 
+                                                          adjusted_df['adjusted_decay_rate']) / 
+                                                         adjusted_df['adjusted_decay_rate']) * 100
+        
+        # Calculate average change for second adjustment
+        average_percent_change_new_vs_adjusted = adjusted_df['percent_change_new_vs_adjusted'].dropna().mean()
+        
+        # Only apply additional weight for positive changes (slower decay)
+        second_adjustment_weight = 1 if average_percent_change_new_vs_adjusted > 0 else 0
+        
+        # Apply final adjustment
+        adjusted_df['final_adjusted_decay_rate'] = (adjusted_df['adjusted_decay_rate'] * 
+                                                   (1 + (average_percent_change_new_vs_adjusted * 
+                                                        second_adjustment_weight) / 100))
+    else:
+        # If no fitted parameter, use the first adjustment
+        adjusted_df['final_adjusted_decay_rate'] = adjusted_df['adjusted_decay_rate']
+    
+    # Store adjustment weights and changes for reference (outside the function)
+    adjustment_info = {
+        'first_adjustment_weight': adjustment_weight,
+        'first_average_percent_change': average_percent_change,
+        'second_adjustment_weight': second_adjustment_weight if fit_parameter_k is not None else 0,
+        'second_average_percent_change': average_percent_change_new_vs_adjusted if fit_parameter_k is not None else 0
+    }
+    
+    # Clean up intermediate calculation columns
+    columns_to_drop = ['decay_rate', 'percent_change', 'adjusted_decay_rate']
+    if 'mldr' in adjusted_df.columns:
+        columns_to_drop.append('mldr')
+    if 'new_decay_rate' in adjusted_df.columns:
+        columns_to_drop.append('new_decay_rate')
+        columns_to_drop.append('percent_change_new_vs_adjusted')
+    
+    adjusted_df.drop(columns=columns_to_drop, inplace=True, errors='ignore')
+    
+    return adjusted_df, adjustment_info
+
+def segment_decay_rates(adjusted_df, breakpoints):
+    """
+    Calculate average decay rates for each segment defined by breakpoints.
+    
+    This function divides the forecast period into segments based on the provided
+    breakpoints, and calculates the average decay rate within each segment.
+    This allows for simplified modeling while respecting the different decay
+    behaviors at different stages of a track's lifecycle.
+    
+    Args:
+        adjusted_df: DataFrame with months and adjusted decay rates
+                    Must contain 'months_since_release' and 'final_adjusted_decay_rate' columns
+        breakpoints: List of month numbers that define segment boundaries
+                    For example, [1, 6, 12, 24, 60, 500] defines 5 segments
+    
+    Returns:
+        pandas.DataFrame: DataFrame with segment numbers and corresponding average decay rates
+                         Contains 'segment' and 'k' columns
+    
+    Notes:
+        - Each segment spans from one breakpoint (inclusive) to the next (exclusive)
+        - The function calculates the average decay rate within each segment
+        - This consolidated representation is used for efficient forecasting
+    """
+    import pandas as pd
+    
+    segments = []
+    avg_decay_rates = []
+
+    # Process each segment defined by the breakpoints
+    for i in range(len(breakpoints) - 1):
+        # Define segment boundaries
+        start_month = breakpoints[i]
+        end_month = breakpoints[i + 1] - 1
+        
+        # Extract data for this segment
+        segment_data = adjusted_df[(adjusted_df['months_since_release'] >= start_month) & 
+                                  (adjusted_df['months_since_release'] <= end_month)]
+        
+        # Calculate average decay rate for the segment
+        avg_decay_rate = segment_data['final_adjusted_decay_rate'].mean()
+        
+        # Store segment number (1-indexed) and its average decay rate
+        segments.append(i + 1)
+        avg_decay_rates.append(avg_decay_rate)
+
+    # Create consolidated DataFrame with segment numbers and decay rates
+    consolidated_df = pd.DataFrame({
+        'segment': segments,
+        'k': avg_decay_rates
+    })
+    
+    return consolidated_df 

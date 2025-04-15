@@ -33,7 +33,10 @@ from utils.data_processing import (
     extract_earliest_date,
     calculate_period_streams,
     process_audience_geography,
-    process_ownership_data
+    process_ownership_data,
+    calculate_months_since_release,
+    calculate_monthly_stream_averages,
+    prepare_decay_rate_fitting_data
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -43,6 +46,8 @@ from utils.decay_rates import (
     fitted_params,
     fitted_params_df,
     breakpoints,
+    DEFAULT_STREAM_INFLUENCE_FACTOR,
+    DEFAULT_FORECAST_PERIODS
 )
 
 # Import decay model functions from the new modules
@@ -53,8 +58,27 @@ from utils.decay_models import (
     fit_decay_curve,
     fit_segment,
     update_fitted_params,
+    get_decay_parameters,
     forecast_values,
     analyze_listener_decay
+)
+
+# Import decay rate adjustment functions
+from utils.decay_models.parameter_updates import (
+    generate_decay_rates_by_month,
+    create_decay_rate_dataframe,
+    adjust_decay_rates_with_observed_data,
+    segment_decay_rates
+)
+
+# Import UI functions
+from utils.ui_functions import display_track_selection_ui, display_financial_parameters_ui
+
+# Import financial parameters
+from utils.financial_parameters import (
+    PREMIUM_STREAM_PERCENTAGE, 
+    AD_SUPPORTED_STREAM_PERCENTAGE,
+    HISTORICAL_VALUE_TIME_ADJUSTMENT
 )
 
 # ===== MODELING FUNCTIONS =====
@@ -227,10 +251,6 @@ with tab1:
             # Each time through the loop, we add one more row to the catalog
             track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
 
-        # Set our main working DataFrame to be the catalog we've built
-        # This DataFrame will be used throughout the rest of the application
-        df = track_catalog_df
-
         # ===== AUDIENCE GEOGRAPHY PROCESSING =====
         # Process the audience geography data to determine geographic distribution of listeners
         # This data is used to apply country-specific royalty rates in revenue projections
@@ -241,41 +261,31 @@ with tab1:
         # Process ownership and MLC claim information to accurately calculate revenue shares
         # This ensures all calculations account for partial ownership and existing royalty claims
         # If no ownership data is provided, assume 100% ownership and 0% MLC claims
-        ownership_df = process_ownership_data(uploaded_file_ownership, df['track_name'])
+        ownership_df = process_ownership_data(uploaded_file_ownership, track_catalog_df['track_name'])
         
-        # ===== FORECAST PARAMETERS SETUP =====
-        stream_influence_factor = 1000
-        forecast_periods = 400
-        current_date = datetime.today()
-
         # ===== UI DISPLAY AND TRACK SELECTION =====
-        st.write("Data Preview:")
-        st.write(df)
-
-        songs = sorted(df['track_name'].unique(), key=lambda x: x.lower())
-        selected_songs = st.multiselect('Select Songs', songs)
+        selected_songs = display_track_selection_ui(track_catalog_df)
         
         # ===== FINANCIAL PARAMETERS =====
-        # Positioned here just before forecasting calculations
-        discount_rate = st.number_input('Discount Rate (%)', min_value=0.00, max_value=10.00, value=0.00, step=0.01, format="%.2f")/100
+        # The discount rate is used to:
+        #  1. Convert future projected royalty earnings to present value
+        #  2. Adjust historical value calculations for time value
+        #  3. Account for risk and opportunity cost in the valuation model
+        # The default of 4.5% represents a moderate risk profile for music royalty assets
+        discount_rate = display_financial_parameters_ui()
 
-        # ===== INITIALIZE RESULTS STORAGE FOR FORECAST CALCULATIONS =====
-        song_forecasts = []
-        weights_and_changes = []
-
+        # ===== RUN BUTTON =====
         if st.button('Run All'):
             # Initialize data structures to store results
             years_plot = []
             export_forecasts = pd.DataFrame()
-            stream_forecasts = []  # Changed from song_forecasts to stream_forecasts
+            stream_forecasts = []
             weights_and_changes = []
 
             # Process each selected song
             for selected_song in selected_songs:
                 # ===== 1. EXTRACT SONG DATA =====
-                song_data = df[df['track_name'] == selected_song].iloc[0]
-
-                value = stream_influence_factor
+                song_data = track_catalog_df[track_catalog_df['track_name'] == selected_song].iloc[0]
                 track_streams_last_365days = song_data['track_streams_last_365days']
                 track_streams_last_90days = song_data['track_streams_last_90days']
                 track_streams_last_30days = song_data['track_streams_last_30days']
@@ -283,111 +293,71 @@ with tab1:
                 data_start_date = song_data['data_start_date']
 
                 # ===== 2. UPDATE DECAY PARAMETERS =====
-                updated_fitted_params_df = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
-                if updated_fitted_params_df is not None:
-                    updated_fitted_params = updated_fitted_params_df.to_dict(orient='records')
-
+                # Get both DataFrame and dictionary formats of decay parameters
+                decay_rates_df, updated_fitted_params = get_decay_parameters(
+                    fitted_params_df, 
+                    DEFAULT_STREAM_INFLUENCE_FACTOR, 
+                    sp_range, 
+                    SP_REACH
+                )
+                
                 # ===== 3. CALCULATE TIME SINCE RELEASE AND AVERAGE STREAMS =====
-                tracking_start_date = datetime.strptime(data_start_date, "%d/%m/%Y")
-                delta = current_date - tracking_start_date
-                months_since_release_total = delta.days // 30
+                months_since_release_total = calculate_months_since_release(data_start_date)
                 
                 # Calculate monthly averages for different time periods
-                monthly_avg_3_months = (track_streams_last_90days - track_streams_last_30days) / (2 if months_since_release_total > 2 else 1)
-                monthly_avg_last_month = track_streams_last_30days
-
-                if months_since_release_total > 3:
-                    monthly_avg_12_months = (track_streams_last_365days - track_streams_last_90days) / (9 if months_since_release_total > 11 else (months_since_release_total - 3))
-                else:
-                    monthly_avg_12_months = monthly_avg_3_months
+                monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month = calculate_monthly_stream_averages(
+                    track_streams_last_30days,
+                    track_streams_last_90days,
+                    track_streams_last_365days,
+                    months_since_release_total
+                )
 
                 # Prepare arrays for decay rate fitting
-                months_since_release = np.array([
-                    max((months_since_release_total - 11), 0),
-                    max((months_since_release_total - 2), 0),
-                    months_since_release_total - 0
-                ])
-                
-                monthly_averages = np.array([monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month])
+                months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
+                    months_since_release_total,
+                    monthly_avg_12_months,
+                    monthly_avg_3_months,
+                    monthly_avg_last_month
+                )
 
                 # ===== 4. FIT DECAY MODEL TO STREAM DATA =====
                 params = fit_segment(months_since_release, monthly_averages)
-                S0, k = params
-                decay_rates_df = updated_fitted_params_df
-
-                # Generate decay rates for all months
-                months_since_release_all = list(range(1, 500))
-                decay_rate_list = []
-
-                for month in months_since_release_all:
-                    for i in range(len(breakpoints) - 1):
-                        if breakpoints[i] <= month < breakpoints[i + 1]:
-                            decay_rate = decay_rates_df.loc[i, 'k']
-                            decay_rate_list.append(decay_rate)
-                            break
-
-                # ===== 5. ADJUST DECAY RATES BASED ON OBSERVED DATA =====
-                final_df = pd.DataFrame({
-                    'months_since_release': months_since_release_all,
-                    'decay_rate': decay_rate_list
-                })
-
-                # Apply measured decay rate to the observed time period
+                S0, fitted_decay_k = params
+                
+                # Generate decay rates for all forecast months using the new function
+                monthly_decay_rates = generate_decay_rates_by_month(decay_rates_df, breakpoints)
+                
+                # Create a DataFrame with months and model-derived decay rates
                 start_month = min(months_since_release)
                 end_month = max(months_since_release)
-                final_df.loc[(final_df['months_since_release'] >= start_month) & 
-                            (final_df['months_since_release'] <= end_month), 'mldr'] = mldr
-
-                # Calculate percentage change between model and observed decay
-                final_df['percent_change'] = ((final_df['mldr'] - final_df['decay_rate']) / final_df['decay_rate']) * 100
-                average_percent_change = final_df['percent_change'].mean()
+                decay_rate_df = create_decay_rate_dataframe(
+                    months_since_release=list(range(1, 501)),
+                    monthly_decay_rates=monthly_decay_rates,
+                    observed_decay_rate=mldr,
+                    observed_start_month=start_month,
+                    observed_end_month=end_month
+                )
                 
-                # Apply weighting based on direction of change
-                if average_percent_change > 0:
-                    weight = min(1, max(0, average_percent_change / 100))
-                else:
-                    weight = 0
-                    
-                # First adjustment of decay rates
-                final_df['adjusted_decay_rate'] = final_df['decay_rate'] * (1 + (average_percent_change * weight) / 100)
+                # ===== 5. ADJUST DECAY RATES BASED ON OBSERVED DATA =====
+                # Apply a two-stage adjustment using observed data
+                adjusted_decay_df, adjustment_info = adjust_decay_rates_with_observed_data(
+                    decay_rate_df, 
+                    fit_parameter_k=fitted_decay_k
+                )
                 
-                # Apply fitted decay rate to observed period
-                final_df.loc[(final_df['months_since_release'] >= start_month) & 
-                            (final_df['months_since_release'] <= end_month), 'new_decay_rate'] = k
-
-                # Compare adjusted decay rate with newly fitted rate
-                final_df['percent_change_new_vs_adjusted'] = ((final_df['new_decay_rate'] - final_df['adjusted_decay_rate']) / final_df['adjusted_decay_rate']) * 100
-                average_percent_change_new_vs_adjusted = final_df['percent_change_new_vs_adjusted'].mean()
+                # Store adjustment weight for later reference
+                weight = adjustment_info['first_adjustment_weight']
+                average_percent_change = adjustment_info['first_average_percent_change']
                 
-                # Final adjustment of decay rates
-                weight_new = 1 if average_percent_change_new_vs_adjusted > 0 else 0
-                final_df['final_adjusted_decay_rate'] = final_df['adjusted_decay_rate'] * (1 + (average_percent_change_new_vs_adjusted * weight_new) / 100)
-                
-                # Clean up intermediate calculation columns
-                final_df.drop(['decay_rate', 'mldr', 'percent_change'], axis=1, inplace=True)
-
                 # ===== 6. SEGMENT DECAY RATES BY TIME PERIOD =====
-                segments = []
-                avg_decay_rates = []
-
-                for i in range(len(breakpoints) - 1):
-                    start = breakpoints[i]
-                    end = breakpoints[i + 1] - 1
-                    segment_data = final_df[(final_df['months_since_release'] >= start) & (final_df['months_since_release'] <= end)]
-                    avg_decay_rate = segment_data['final_adjusted_decay_rate'].mean()
-                    segments.append(i + 1)
-                    avg_decay_rates.append(avg_decay_rate)
-
-                consolidated_df = pd.DataFrame({
-                    'segment': segments,
-                    'k': avg_decay_rates
-                })
+                # Calculate average decay rates for each segment
+                consolidated_df = segment_decay_rates(adjusted_decay_df, breakpoints)
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
                 initial_value = track_streams_last_30days
                 start_period = months_since_release_total
 
-                forecasts = forecast_values(consolidated_df, initial_value, start_period, forecast_periods)
+                forecasts = forecast_values(consolidated_df, initial_value, start_period, DEFAULT_FORECAST_PERIODS)
 
                 # Convert forecasts to a DataFrame
                 forecasts_df = pd.DataFrame(forecasts)
@@ -414,10 +384,10 @@ with tab1:
                 # Calculate historical value from streams
                 ad_supported = df_additional.loc[mask, 'Spotify_Ad-supported'].mean()
                 premium = df_additional.loc[mask, 'Spotify_Premium'].mean()
-                hist_ad = 0.6 * historical * ad_supported
-                hist_prem = 0.4 * historical * premium
+                hist_ad = AD_SUPPORTED_STREAM_PERCENTAGE * historical * ad_supported
+                hist_prem = PREMIUM_STREAM_PERCENTAGE * historical * premium
                 hist_value = (hist_ad + hist_prem) * (listener_percentage_usa)
-                hist_value = hist_value / ((1 + discount_rate / 12) ** 3)  # Apply time value discount
+                hist_value = hist_value / ((1 + discount_rate / 12) ** HISTORICAL_VALUE_TIME_ADJUSTMENT)  # Apply time value discount
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
                 monthly_forecasts_df = pd.DataFrame({
@@ -473,7 +443,7 @@ with tab1:
                 Total_Value = new_forecast_value + hist_value
 
                 # ===== 12. STORE FORECAST SUMMARY =====
-                song_forecasts.append({
+                stream_forecasts.append({
                     'track_name': selected_song,
                     'historical_streams': historical,
                     'forecast_streams': total_forecast_value,
@@ -546,7 +516,7 @@ with tab1:
             # Combine yearly data and calculate annual totals
             years_plot_df = pd.concat(years_plot)
             yearly_disc_sum_df = years_plot_df.groupby('Year')['DISC'].sum().reset_index()
-            df_forecasts = pd.DataFrame(song_forecasts)
+            df_forecasts = pd.DataFrame(stream_forecasts)
 
             # ===== 15. OWNERSHIP ADJUSTMENTS =====
             # Merge forecast data with ownership information

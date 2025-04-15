@@ -16,6 +16,10 @@ used in the streaming prediction model. It combines three main components:
    - Includes breakpoints defining the boundaries between segments
    - Used in the exponential decay model for predictions
 
+4. Configuration Parameters (from config.py):
+   - Default parameter values used in the forecasting model
+   - Includes stream influence factor and forecast periods
+
 The module provides a clean interface for accessing all these components, making it easy
 to use the decay rate model in other parts of the application.
 """
@@ -23,6 +27,7 @@ to use the decay rate model in other parts of the application.
 from .volume_ranges import ranges_sp, sp_range
 from .sp_reach import SP_REACH_DATA, SP_REACH
 from .fitted_params import fitted_params, fitted_params_df, breakpoints
+from .config import DEFAULT_STREAM_INFLUENCE_FACTOR, DEFAULT_FORECAST_PERIODS
 
 __all__ = [
     'ranges_sp',
@@ -31,5 +36,7 @@ __all__ = [
     'SP_REACH',
     'fitted_params',
     'fitted_params_df',
-    'breakpoints'
+    'breakpoints',
+    'DEFAULT_STREAM_INFLUENCE_FACTOR',
+    'DEFAULT_FORECAST_PERIODS'
 ] 

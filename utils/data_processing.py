@@ -224,3 +224,95 @@ def process_ownership_data(ownership_file, track_names):
         })
     
     return ownership_df 
+
+def calculate_months_since_release(release_date_str, date_format="%d/%m/%Y"):
+    """
+    Calculate the number of months between a release date and today.
+    
+    Parameters:
+    -----------
+    release_date_str : str
+        The release date as a string
+    date_format : str, optional
+        The format of the release date string, defaults to "%d/%m/%Y"
+        
+    Returns:
+    --------
+    int:
+        The number of months since the release date
+    """
+    from datetime import datetime
+    
+    tracking_start_date = datetime.strptime(release_date_str, date_format)
+    delta = datetime.today() - tracking_start_date
+    return delta.days // 30
+
+def calculate_monthly_stream_averages(streams_last_30days, streams_last_90days, streams_last_365days, months_since_release):
+    """
+    Calculate average monthly streams for different time periods.
+    
+    Parameters:
+    -----------
+    streams_last_30days : int
+        Number of streams in the last 30 days
+    streams_last_90days : int
+        Number of streams in the last 90 days
+    streams_last_365days : int
+        Number of streams in the last 365 days
+    months_since_release : int
+        Number of months since the track was released
+        
+    Returns:
+    --------
+    tuple:
+        (monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month)
+        Average streams per month for 12-month, 3-month, and 1-month periods
+    """
+    # Calculate 3-month average (excluding last month)
+    monthly_avg_3_months = (streams_last_90days - streams_last_30days) / (2 if months_since_release > 2 else 1)
+    
+    # The last month average is directly the streams in the last 30 days
+    monthly_avg_last_month = streams_last_30days
+    
+    # Calculate 12-month average (excluding last 3 months)
+    if months_since_release > 3:
+        monthly_avg_12_months = (streams_last_365days - streams_last_90days) / (9 if months_since_release > 11 else (months_since_release - 3))
+    else:
+        monthly_avg_12_months = monthly_avg_3_months
+        
+    return monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month
+
+def prepare_decay_rate_fitting_data(months_since_release, monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month):
+    """
+    Prepare data arrays for decay rate fitting model.
+    
+    Parameters:
+    -----------
+    months_since_release : int
+        Number of months since the track was released
+    monthly_avg_12_months : float
+        Average monthly streams over the 12-month period
+    monthly_avg_3_months : float
+        Average monthly streams over the 3-month period
+    monthly_avg_last_month : float
+        Average monthly streams over the last month
+        
+    Returns:
+    --------
+    tuple:
+        (months_array, averages_array)
+        NumPy arrays containing the months since release and corresponding average stream values
+    """
+    import numpy as np
+    
+    # Create array of months for decay curve fitting
+    months_array = np.array([
+        max((months_since_release - 11), 0),  # 12 months ago (or 0 if track is newer)
+        max((months_since_release - 2), 0),   # 3 months ago (or 0 if track is newer)
+        months_since_release - 0              # Current month
+    ])
+    
+    # Create array of corresponding monthly stream averages
+    averages_array = np.array([monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month])
+    
+    return months_array, averages_array 
