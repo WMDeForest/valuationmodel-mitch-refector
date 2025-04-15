@@ -97,6 +97,15 @@ from utils.forecast_projections import (
     apply_ownership_adjustments
 )
 
+# Import geographic analysis functions
+from utils.geographic_analysis import (
+    process_country_breakdown,
+    get_top_countries,
+    create_country_distribution_chart,
+    create_yearly_revenue_chart,
+    detect_streaming_fraud
+)
+
 # ===== MODELING FUNCTIONS =====
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
@@ -491,91 +500,26 @@ with tab1:
             catalog_valuation_summary_df = display_valuation_summary(final_valuation_display_df)
 
             # ===== 18. GEOGRAPHIC DISTRIBUTION ANALYSIS =====
-            # Extract country-specific revenue data
-            country_breakdown = []
-            for index, row in listener_geography_df.iterrows():
-                country = row['Country']
-                forecast_no_disc_value = monthly_track_revenue_projections_df[country + ' Royalty Value'].sum() 
-                country_breakdown.append({
-                    'Country': country,
-                    'forecast_no_disc': forecast_no_disc_value
-                })
-                
-            # Process country breakdown data
-            df_country_breakdown = pd.DataFrame(country_breakdown)
-            df_country_breakdown['forecast_no_disc_numeric'] = df_country_breakdown['forecast_no_disc'].replace({'\$': '', ',': ''}, regex=True).astype(float)
-
-            # Calculate total forecast value and country percentages
-            total_forecast_no_disc_value = df_country_breakdown['forecast_no_disc_numeric'].sum()
-            df_country_breakdown['Percentage'] = (df_country_breakdown['forecast_no_disc_numeric'] / total_forecast_no_disc_value) * 100
-            
-            # Get top countries by revenue contribution
-            top_countries = df_country_breakdown.sort_values(by='forecast_no_disc_numeric', ascending=False).head(10)
-            top_10_percentage_sum = top_countries['Percentage'].sum()
+            # Process country-specific revenue data and get top countries
+            df_country_breakdown = process_country_breakdown(listener_geography_df, monthly_track_revenue_projections_df)
+            top_countries, top_10_percentage_sum = get_top_countries(df_country_breakdown)
             
             # ===== 19. VISUALIZATION: TOP COUNTRIES =====
-            # Create horizontal bar chart for top revenue countries
-            fig, ax = plt.subplots()
-            bar_color = 'teal'
-            bars = ax.barh(top_countries['Country'], top_countries['forecast_no_disc_numeric'], color=bar_color)
-
-            # Configure chart appearance
-            ax.set_xlabel('% of Forecast Value')
-            ax.set_title(f'Top 10 Countries Contribute {top_10_percentage_sum:.1f}% to Total Forecast Value')
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${int(x):,}"))
-            max_value = top_countries['forecast_no_disc_numeric'].max()
-            ax.set_xlim(0, max_value * 1.25)
-            ax.set_xticks([])
-            
-            # Add percentage labels to bars
-            for bar, percentage in zip(bars, top_countries['Percentage']):
-                width = bar.get_width()
-                ax.text(width + (width * 0.01), bar.get_y() + bar.get_height() / 2, 
-                        f'{percentage:.1f}%', va='center', ha='left', 
-                        fontsize=10, color='black')
-
-            # Display the country distribution chart
+            # Create and display country distribution chart
+            fig, ax = create_country_distribution_chart(top_countries, top_10_percentage_sum)
             st.pyplot(fig)
 
             # ===== 20. VISUALIZATION: YEARLY INCOME =====
-            # Create bar chart for yearly revenue projection
-            fig, ax = plt.subplots()
-            bar_color = 'teal'
-            bars = ax.bar(yearly_total_by_year_df['Year'], yearly_total_by_year_df['DISC'], color=bar_color)
-
-            # Configure chart appearance
-            ax.set_xlabel('Year')
-            ax.set_title('Income by Year (discounted)')
-            ax.set_ylabel('')
-            ax.yaxis.set_visible(False)
-            max_value = yearly_total_by_year_df['DISC'].max()
-            ax.set_ylim(0, max_value * 1.25)
-
-            # Add value labels to bars
-            for bar, value in zip(bars, yearly_total_by_year_df['DISC']):
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width() / 2, height, f'${int(value)}', 
-                        va='bottom', ha='center', fontsize=10, color='black')
-
-            # Display the yearly income chart
+            # Create and display yearly revenue chart
+            fig, ax = create_yearly_revenue_chart(yearly_total_by_year_df)
             st.pyplot(fig)
 
             # ===== 21. FRAUD DETECTION =====
-            # Cross-reference audience data with population data
-            warning_df = pd.merge(listener_geography_df, population_df, on='Country', how='left')
-            
-            # Calculate threshold for suspicious activity (20% of population)
-            warning_df['TwentyPercentPopulation'] = warning_df['Population'] * 0.20
-            
-            # Flag countries with abnormally high listener numbers
-            warning_df['Above20Percent'] = warning_df['Spotify Monthly Listeners'] > warning_df['TwentyPercentPopulation']
-            warning_df['Alert'] = warning_df['Above20Percent'].apply(lambda x: 1 if x else 0)
-            
-            # Get list of countries with potential streaming fraud
-            alert_countries = warning_df[warning_df['Alert'] == 1]['Country']
+            # Detect potential streaming fraud
+            alert_countries = detect_streaming_fraud(listener_geography_df, population_df)
             
             # Display fraud alerts if any are detected
-            if not alert_countries.empty:
+            if alert_countries:
                 st.write("Fraud Alert. This artist has unusually high streams from these countries:")
                 for country in alert_countries:
                     st.write(country)
