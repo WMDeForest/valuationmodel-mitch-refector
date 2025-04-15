@@ -10,6 +10,10 @@ of the decay model forecasting system, separating them from application code.
 # Range: Should be between 0-1,000,000, with 1000 being in lowest range (0-10,000)
 DEFAULT_STREAM_INFLUENCE_FACTOR = 1000
 
-# Number of months to forecast into the future
+# Number of months to forecast into the future (for full decay curves)
 # 400 months = ~33 years of forecasting
-DEFAULT_FORECAST_PERIODS = 400 
+DEFAULT_FORECAST_PERIODS = 400
+
+# Default number of years to use for valuation calculations
+# Industry standard is typically 20 years for music asset valuation
+DEFAULT_FORECAST_YEARS = 20 

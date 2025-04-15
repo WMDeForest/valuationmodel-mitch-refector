@@ -47,7 +47,8 @@ from utils.decay_rates import (
     fitted_params_df,
     track_lifecycle_segment_boundaries,
     DEFAULT_STREAM_INFLUENCE_FACTOR,
-    DEFAULT_FORECAST_PERIODS
+    DEFAULT_FORECAST_PERIODS,
+    DEFAULT_FORECAST_YEARS
 )
 
 # Import decay model functions from the new modules
@@ -59,7 +60,7 @@ from utils.decay_models import (
     fit_segment,
     update_fitted_params,
     get_decay_parameters,
-    forecast_values,
+    forecast_track_streams,
     analyze_listener_decay
 )
 
@@ -302,7 +303,7 @@ with tab1:
         if st.button('Run All'):
             # Initialize data structures to store results
             years_plot = []
-            export_forecasts = pd.DataFrame()
+            export_track_streams_forecast = pd.DataFrame()
             stream_forecasts = []
             weights_and_changes = []
 
@@ -369,20 +370,17 @@ with tab1:
                 segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(adjusted_track_decay_df, track_lifecycle_segment_boundaries)
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
-                initial_value = track_streams_last_30days
-                # Retrieve months since release for forecast period calculation
-                start_period = song_data['months_since_release_total']
+                track_streams_forecast = forecast_track_streams(segmented_track_decay_rates_df, track_streams_last_30days, song_data['months_since_release_total'], DEFAULT_FORECAST_PERIODS)
 
-                forecasts = forecast_values(segmented_track_decay_rates_df, initial_value, start_period, DEFAULT_FORECAST_PERIODS)
-
-                # Convert forecasts to a DataFrame
-                forecasts_df = pd.DataFrame(forecasts)
-                forecasts_df2 = forecasts_df.copy()  # Create a copy for export
-                forecasts_df2['track_name'] = selected_song
-                export_forecasts = pd.concat([export_forecasts, forecasts_df2], ignore_index=True)
+                # Convert forecasts to a DataFrame - the column contains predictions for each future month
+                track_streams_forecast_df = pd.DataFrame(track_streams_forecast)
+                track_streams_forecast_df2 = track_streams_forecast_df.copy()  # Create a copy for export
+                track_streams_forecast_df2['track_name'] = selected_song #add track name to the dataframe for export
+                export_track_streams_forecast = pd.concat([export_track_streams_forecast, track_streams_forecast_df2], ignore_index=True)
                 
-                # Calculate the total forecast value for the first 240 months (20 years)
-                total_forecast_value = forecasts_df.loc[:240, 'forecasted_value'].sum()
+                # Calculate the total predicted streams for the forecast period
+                forecast_months = DEFAULT_FORECAST_YEARS * 12
+                total_track_streams_forecast = track_streams_forecast_df.loc[:forecast_months, 'predicted_streams_for_month'].sum()
 
                 # ===== 8. CALCULATE HISTORICAL VALUE =====
                 tracking_start_date = datetime.strptime(data_start_date, "%d/%m/%Y")
@@ -407,9 +405,9 @@ with tab1:
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
                 monthly_forecasts_df = pd.DataFrame({
-                    'track_name': [selected_song] * len(forecasts_df),
-                    'month': forecasts_df['month'],
-                    'forecasted_value': forecasts_df['forecasted_value']
+                    'track_name': [selected_song] * len(track_streams_forecast_df),
+                    'month': track_streams_forecast_df['month'],
+                    'predicted_streams_for_month': track_streams_forecast_df['predicted_streams_for_month']
                 })
 
                 # Add month index for time-based calculations
@@ -432,7 +430,7 @@ with tab1:
                 # Calculate country-specific stream values
                 for index, row in listener_geography_df.iterrows():
                     country = row['Country']
-                    monthly_forecasts_df[country + ' Value'] = monthly_forecasts_df['forecasted_value'] * monthly_forecasts_df[country + ' %']
+                    monthly_forecasts_df[country + ' Value'] = monthly_forecasts_df['predicted_streams_for_month'] * monthly_forecasts_df[country + ' %']
 
                 # Calculate country-specific royalty values
                 for index, row in listener_geography_df.iterrows():
@@ -462,7 +460,7 @@ with tab1:
                 stream_forecasts.append({
                     'track_name': selected_song,
                     'historical_streams': historical,
-                    'forecast_streams': total_forecast_value,
+                    'forecast_streams': total_track_streams_forecast,
                     'hist_value': hist_value,
                     'forecast_no_disc': forecast_OG,
                     'forecast_disc': new_forecast_value,
@@ -523,10 +521,10 @@ with tab1:
 
             # ===== 14. DATA EXPORT AND AGGREGATION =====
             # Prepare forecast data for download
-            catalog_to_download = export_forecasts
+            catalog_to_download = export_track_streams_forecast
             csv = catalog_to_download.to_csv(index=False)
             b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="export_forecasts.csv">Download forecasts DataFrame</a>'
+            href = f'<a href="data:file/csv;base64,{b64}" download="export_track_streams_forecast.csv">Download Track Streams Forecast</a>'
             st.markdown(href, unsafe_allow_html=True)
             
             # Combine yearly data and calculate annual totals

@@ -27,7 +27,7 @@ to use the decay rate model in other parts of the application.
 from .volume_ranges import ranges_sp, sp_range
 from .sp_reach import SP_REACH_DATA, SP_REACH
 from .fitted_params import fitted_params, fitted_params_df, track_lifecycle_segment_boundaries
-from .config import DEFAULT_STREAM_INFLUENCE_FACTOR, DEFAULT_FORECAST_PERIODS
+from .config import DEFAULT_STREAM_INFLUENCE_FACTOR, DEFAULT_FORECAST_PERIODS, DEFAULT_FORECAST_YEARS
 
 __all__ = [
     'ranges_sp',
@@ -38,5 +38,6 @@ __all__ = [
     'fitted_params_df',
     'track_lifecycle_segment_boundaries',
     'DEFAULT_STREAM_INFLUENCE_FACTOR',
-    'DEFAULT_FORECAST_PERIODS'
+    'DEFAULT_FORECAST_PERIODS',
+    'DEFAULT_FORECAST_YEARS'
 ] 

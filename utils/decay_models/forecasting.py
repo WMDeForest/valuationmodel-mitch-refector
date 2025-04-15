@@ -8,7 +8,10 @@ decay rates to different time segments in a track's lifetime.
 import numpy as np
 from utils.decay_rates import track_lifecycle_segment_boundaries
 
-def forecast_values(consolidated_df, initial_value, start_period, forecast_periods):
+# Define valuation parameters
+DEFAULT_FORECAST_YEARS = 20  # Default forecast period in years
+
+def forecast_track_streams(consolidated_df, initial_value, start_period, forecast_periods):
     """
     Generate forecasts for future streaming values using segmented decay rates.
     
@@ -84,7 +87,7 @@ def forecast_values(consolidated_df, initial_value, start_period, forecast_perio
         # Store the forecast with metadata
         forecasts.append({
             'month': current_month,
-            'forecasted_value': forecast_value,
+            'predicted_streams_for_month': forecast_value,
             'segment_used': current_segment + 1,  # +1 for human-readable segment numbering
             'time_used': current_month - start_period + 1
         })

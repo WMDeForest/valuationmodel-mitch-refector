@@ -64,7 +64,7 @@ Adjusts decay parameters based on external factors:
 ### `forecasting.py`
 
 Generates future streaming predictions:
-- `forecast_values`: Creates month-by-month projections using segmented decay rates
+- `forecast_track_streams`: Creates month-by-month projections using segmented decay rates
 
 ## Data Flow & Process
 
@@ -86,7 +86,7 @@ Here's how the components work together in a typical analysis:
    - The artist's MLDR influences the final decay rates used
 
 4. **Forecasting**
-   - Using the adjusted decay parameters, `forecast_values` generates streams forecasts
+   - Using the adjusted decay parameters, `forecast_track_streams` generates streams forecasts
    - Different decay rates are applied to different future time periods
    - Monthly stream forecasts cascade, with each month's output becoming the starting point for the next
 
@@ -107,7 +107,7 @@ Here's how the components work together in a typical analysis:
 
 ```python
 # Simplified example workflow
-from utils.decay_models import remove_anomalies, calculate_decay_rate, update_fitted_params, forecast_values
+from utils.decay_models import remove_anomalies, calculate_decay_rate, update_fitted_params, forecast_track_streams
 
 # 1. Clean the data
 clean_data = remove_anomalies(raw_streaming_data)
@@ -119,7 +119,7 @@ mldr, _ = calculate_decay_rate(clean_data)
 adjusted_params = update_fitted_params(fitted_params_df, stream_influence_factor, sp_range, SP_REACH)
 
 # 4. Generate forecasts
-forecasts = forecast_values(adjusted_params, current_streams, months_since_release, forecast_periods)
+forecasts = forecast_track_streams(adjusted_params, current_streams, months_since_release, forecast_periods)
 ```
 
 ## Future Enhancements
