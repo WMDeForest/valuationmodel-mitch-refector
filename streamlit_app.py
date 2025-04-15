@@ -241,7 +241,7 @@ with tab1:
             months_since_release_total = calculate_months_since_release(data_start_date)
             
             # Calculate monthly averages for different time periods
-            monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month = calculate_monthly_stream_averages(
+            avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
                 track_streams_last_30days,
                 track_streams_last_90days,
                 track_streams_last_365days,
@@ -251,9 +251,9 @@ with tab1:
             # Prepare arrays for decay rate fitting
             months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
                 months_since_release_total,
-                monthly_avg_12_months,
-                monthly_avg_3_months,
-                monthly_avg_last_month
+                avg_monthly_streams_months_4to12,
+                avg_monthly_streams_months_2to3,
+                track_streams_last_30days
             )
             
             # Create a single row DataFrame containing all key metrics for this track
@@ -265,9 +265,8 @@ with tab1:
                 'track_streams_last_365days': [track_streams_last_365days],
                 'total_track_streams': [total_track_streams],
                 'months_since_release_total': [months_since_release_total],
-                'monthly_avg_12_months': [monthly_avg_12_months],
-                'monthly_avg_3_months': [monthly_avg_3_months], 
-                'monthly_avg_last_month': [monthly_avg_last_month],
+                'avg_monthly_streams_months_4to12': [avg_monthly_streams_months_4to12],
+                'avg_monthly_streams_months_2to3': [avg_monthly_streams_months_2to3],
                 'months_since_release': [months_since_release.tolist() if hasattr(months_since_release, 'tolist') else months_since_release],
                 'monthly_averages': [monthly_averages.tolist() if hasattr(monthly_averages, 'tolist') else monthly_averages]
             })
@@ -330,7 +329,7 @@ with tab1:
                 months_since_release_total = song_data['months_since_release_total']
                 
                 # Calculate monthly averages for different time periods
-                monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month = song_data['monthly_avg_12_months'], song_data['monthly_avg_3_months'], song_data['monthly_avg_last_month']
+                avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = song_data['avg_monthly_streams_months_4to12'], song_data['avg_monthly_streams_months_2to3']
 
                 # Prepare arrays for decay rate fitting
                 months_since_release, monthly_averages = song_data['months_since_release'], song_data['monthly_averages']

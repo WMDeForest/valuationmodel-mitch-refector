@@ -265,24 +265,21 @@ def calculate_monthly_stream_averages(streams_last_30days, streams_last_90days, 
     Returns:
     --------
     tuple:
-        (monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month)
-        Average streams per month for 12-month, 3-month, and 1-month periods
+        (avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3)
+        Average streams per month for months 4-12 and 2-3
     """
     # Calculate 3-month average (excluding last month)
-    monthly_avg_3_months = (streams_last_90days - streams_last_30days) / (2 if months_since_release > 2 else 1)
-    
-    # The last month average is directly the streams in the last 30 days
-    monthly_avg_last_month = streams_last_30days
+    avg_monthly_streams_months_2to3 = (streams_last_90days - streams_last_30days) / (2 if months_since_release > 2 else 1)
     
     # Calculate 12-month average (excluding last 3 months)
     if months_since_release > 3:
-        monthly_avg_12_months = (streams_last_365days - streams_last_90days) / (9 if months_since_release > 11 else (months_since_release - 3))
+        avg_monthly_streams_months_4to12 = (streams_last_365days - streams_last_90days) / (9 if months_since_release > 11 else (months_since_release - 3))
     else:
-        monthly_avg_12_months = monthly_avg_3_months
+        avg_monthly_streams_months_4to12 = avg_monthly_streams_months_2to3
         
-    return monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month
+    return avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3
 
-def prepare_decay_rate_fitting_data(months_since_release, monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month):
+def prepare_decay_rate_fitting_data(months_since_release, avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3, streams_last_30days):
     """
     Prepare data arrays for decay rate fitting model.
     
@@ -290,12 +287,12 @@ def prepare_decay_rate_fitting_data(months_since_release, monthly_avg_12_months,
     -----------
     months_since_release : int
         Number of months since the track was released
-    monthly_avg_12_months : float
-        Average monthly streams over the 12-month period
-    monthly_avg_3_months : float
-        Average monthly streams over the 3-month period
-    monthly_avg_last_month : float
-        Average monthly streams over the last month
+    avg_monthly_streams_months_4to12 : float
+        Average monthly streams for months 4-12
+    avg_monthly_streams_months_2to3 : float
+        Average monthly streams for months 2-3
+    streams_last_30days : float
+        Total streams in the last month (last 30 days)
         
     Returns:
     --------
@@ -313,6 +310,6 @@ def prepare_decay_rate_fitting_data(months_since_release, monthly_avg_12_months,
     ])
     
     # Create array of corresponding monthly stream averages
-    averages_array = np.array([monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month])
+    averages_array = np.array([avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3, streams_last_30days])
     
     return months_array, averages_array 
