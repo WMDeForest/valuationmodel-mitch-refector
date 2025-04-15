@@ -8,7 +8,7 @@ and the forecasting process, extracting the key parameters that drive prediction
 import numpy as np
 from scipy.optimize import curve_fit
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
-from utils.decay_models.preprocessing import remove_anomalies
+from utils.data_processing import remove_anomalies
 from utils.data_processing import sample_data
 
 def fit_segment(months_since_release, streams):
@@ -175,6 +175,9 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     """
     # Ensure data is sorted
     df = df_monthly_listeners.sort_values(by='Date')
+
+    # Ensure data is sorted
+    sorted_monthly_listeners_df = df_monthly_listeners.sort_values(by='Date')
     
     # Sample data if needed (e.g., keep every 7th row for weekly sampling)
     if sample_rate and sample_rate > 1:

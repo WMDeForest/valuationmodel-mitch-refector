@@ -144,19 +144,19 @@ with tab1:
         # ===== DATA PROCESSING SECTION =====
         # 1. DATA LOADING
         # Read the uploaded CSV file
-        df = pd.read_csv(uploaded_file)
+        artist_monthly_listeners_df = pd.read_csv(uploaded_file)
         
         # 2. DATA VALIDATION
         # Check if required columns exist
-        if validate_columns(df, ['Date', 'Monthly Listeners']):
+        if validate_columns(artist_monthly_listeners_df, ['Date', 'Monthly Listeners']):
             # 3. DATA SELECTION
             # Keep only required columns
             columns_to_keep = ['Date', 'Monthly Listeners']
-            df = select_columns(df, columns_to_keep)
+            artist_monthly_listeners_df = select_columns(artist_monthly_listeners_df, columns_to_keep)
             
             # 4. DATE CONVERSION
             # Convert 'Date' column to datetime format with error handling
-            df, date_issues = convert_to_datetime(df, 'Date', dayfirst=True)
+            artist_monthly_listeners_df, date_issues = convert_to_datetime(artist_monthly_listeners_df, 'Date', dayfirst=True)
             
             # Display any issues with date conversion
             for issue in date_issues:
@@ -168,7 +168,7 @@ with tab1:
            
             # 5. INITIAL DECAY ANALYSIS
             # Calculate decay rates and get min/max dates for the UI slider
-            initial_results = analyze_listener_decay(df)
+            initial_results = analyze_listener_decay(artist_monthly_listeners_df)
 
             # ===== UI COMPONENTS SECTION =====
             min_date = initial_results['min_date']
@@ -191,7 +191,7 @@ with tab1:
             if start_date and end_date:
                 # ===== CORE ANALYSIS SECTION =====
                 # 7. RUN DECAY RATE ANALYSIS WITH SELECTED DATE RANGE
-                results = analyze_listener_decay(df, start_date, end_date)
+                results = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
                 subset_df = results['subset_df']
                 mldr = results['mldr']
                 popt = results['popt']
