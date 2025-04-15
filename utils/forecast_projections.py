@@ -166,4 +166,50 @@ def aggregate_into_yearly_periods(projections_df, first_year_months=9):
     aggregated_df['Year'] = range(1, len(aggregated_df) + 1)
     aggregated_df.drop(columns=['Start_Month'], inplace=True)
     
-    return aggregated_df 
+    return aggregated_df
+
+def apply_ownership_adjustments(track_valuation_results_df, ownership_df):
+    """
+    Adjust track valuation results based on ownership percentages and MLC claims.
+    
+    Parameters:
+    -----------
+    track_valuation_results_df : pd.DataFrame
+        DataFrame containing track valuation results
+    ownership_df : pd.DataFrame
+        DataFrame containing ownership and MLC claimed percentages
+        
+    Returns:
+    --------
+    pd.DataFrame
+        Adjusted valuation results with ownership percentages applied
+    """
+    # Merge valuation results with ownership information
+    adjusted_df = track_valuation_results_df.merge(
+        ownership_df[['track_name', 'MLC Claimed(%)', 'Ownership(%)']], 
+        on='track_name', 
+        how='left'
+    )
+
+    # Ensure ownership percentages are properly formatted
+    adjusted_df['MLC Claimed(%)'] = pd.to_numeric(adjusted_df['MLC Claimed(%)'], errors='coerce').fillna(0)
+    adjusted_df['Ownership(%)'] = pd.to_numeric(adjusted_df['Ownership(%)'], errors='coerce').fillna(1)
+    
+    # Adjust historical value based on MLC claims and ownership percentage
+    adjusted_df['historical_royalty_value'] = adjusted_df.apply(
+        lambda row: min(
+            (1 - row['MLC Claimed(%)']) * row['historical_royalty_value'], 
+            row['Ownership(%)'] * row['historical_royalty_value']
+        ),
+        axis=1
+    )
+    
+    # Adjust forecast values based on ownership percentage
+    adjusted_df['undiscounted_future_royalty'] = adjusted_df['undiscounted_future_royalty'].astype(float) * adjusted_df['Ownership(%)']
+    adjusted_df['discounted_future_royalty'] = adjusted_df['discounted_future_royalty'].astype(float) * adjusted_df['Ownership(%)']
+    adjusted_df['total_track_valuation'] = adjusted_df['discounted_future_royalty'] + adjusted_df['historical_royalty_value']
+    
+    # Remove ownership columns after applying adjustments
+    adjusted_df = adjusted_df.drop(columns=['Ownership(%)', 'MLC Claimed(%)'])
+    
+    return adjusted_df 

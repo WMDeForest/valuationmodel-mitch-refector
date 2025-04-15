@@ -73,7 +73,12 @@ from utils.decay_models.parameter_updates import (
 )
 
 # Import UI functions
-from utils.ui_functions import display_track_selection_ui, display_financial_parameters_ui
+from utils.ui_functions import (
+    display_track_selection_ui, 
+    display_financial_parameters_ui, 
+    display_valuation_results,
+    display_valuation_summary
+)
 
 # Import financial parameters
 from utils.financial_parameters import (
@@ -88,7 +93,8 @@ from utils.historical_royalty_revenue import calculate_historical_royalty_revenu
 # Import forecast projections functions
 from utils.forecast_projections import (
     create_monthly_track_revenue_projections,
-    aggregate_into_yearly_periods
+    aggregate_into_yearly_periods,
+    apply_ownership_adjustments
 )
 
 # ===== MODELING FUNCTIONS =====
@@ -473,57 +479,16 @@ with tab1:
             track_valuation_results_df = pd.DataFrame(track_valuation_summaries)
 
             # ===== 15. OWNERSHIP ADJUSTMENTS =====
-            # Merge forecast data with ownership information
-            merged_df = track_valuation_results_df.merge(ownership_df[['track_name', 'MLC Claimed(%)', 'Ownership(%)']], on='track_name', how='left')
-
-            # Ensure ownership percentages are properly formatted
-            merged_df['MLC Claimed(%)'] = pd.to_numeric(merged_df['MLC Claimed(%)'], errors='coerce').fillna(0)
-            merged_df['Ownership(%)'] = pd.to_numeric(merged_df['Ownership(%)'], errors='coerce').fillna(1)
-            
-            # Adjust historical value based on MLC claims and ownership percentage
-            merged_df['historical_royalty_value'] = merged_df.apply(
-                lambda row: min((1 - row['MLC Claimed(%)']) * row['historical_royalty_value'], row['Ownership(%)'] * row['historical_royalty_value']),
-                axis=1
-            )
-            
-            # Adjust forecast values based on ownership percentage
-            merged_df['undiscounted_future_royalty'] = merged_df['undiscounted_future_royalty'].astype(float) * (merged_df['Ownership(%)'])
-            merged_df['discounted_future_royalty'] = merged_df['discounted_future_royalty'].astype(float) * (merged_df['Ownership(%)'])
-            merged_df['total_track_valuation'] = merged_df['discounted_future_royalty'] + merged_df['historical_royalty_value']
-            merged_df = merged_df.drop(columns=['Ownership(%)', 'MLC Claimed(%)'])
+            # Apply ownership adjustments to valuation results
+            ownership_adjusted_valuation_df = apply_ownership_adjustments(track_valuation_results_df, ownership_df)
             
             # ===== 16. DISPLAY FORMATTING =====
-            # Format values for presentation with commas and currency symbols
-            final_valuation_display_df = merged_df
-            
-            final_valuation_display_df['historical_streams'] = final_valuation_display_df['historical_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            final_valuation_display_df['forecast_streams'] = final_valuation_display_df['forecast_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            final_valuation_display_df['undiscounted_future_royalty'] = final_valuation_display_df['undiscounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            final_valuation_display_df['discounted_future_royalty'] = final_valuation_display_df['discounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            final_valuation_display_df['historical_royalty_value'] = final_valuation_display_df['historical_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            final_valuation_display_df['total_track_valuation'] = final_valuation_display_df['total_track_valuation'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-
-            # Display the formatted forecast table
-            st.write(final_valuation_display_df)
+            # Format and display valuation results
+            final_valuation_display_df = display_valuation_results(ownership_adjusted_valuation_df)
 
             # ===== 17. SUMMARY STATISTICS =====
-            # Calculate summary totals across all tracks
-            sum_df = pd.DataFrame({
-                'Metric': ['Historical Value', 'Undiscounted Future Value', 'Discounted Future Value', 'Total Valuation'],
-                'Sum': [
-                    final_valuation_display_df['historical_royalty_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    final_valuation_display_df['undiscounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    final_valuation_display_df['discounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    final_valuation_display_df['total_track_valuation'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
-                ]
-            })
-
-            # Format summary values for display
-            sum_df['Sum'] = sum_df['Sum'].apply(lambda x: f"${int(round(x)):,}")
-
-            # Display the summary table
-            st.write("Summed Values:")
-            st.write(sum_df)
+            # Calculate and display summary statistics across all tracks in the catalog
+            catalog_valuation_summary_df = display_valuation_summary(final_valuation_display_df)
 
             # ===== 18. GEOGRAPHIC DISTRIBUTION ANALYSIS =====
             # Extract country-specific revenue data
