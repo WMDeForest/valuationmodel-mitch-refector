@@ -110,9 +110,9 @@ def get_decay_parameters(fitted_params_df, stream_influence_factor, sp_range, sp
     
     return None, None 
 
-def generate_decay_rates_by_month(decay_rates_df, breakpoints, forecast_horizon=500):
+def generate_track_decay_rates_by_month(decay_rates_df, breakpoints, forecast_horizon=500):
     """
-    Generate a list of decay rates for each month in the forecast horizon based on breakpoints.
+    Generate a list of track-specific decay rates for each month in the forecast horizon.
     
     This function creates a comprehensive mapping of decay rates for each month
     in the forecast period, based on the segmentation defined by breakpoints.
@@ -127,7 +127,7 @@ def generate_decay_rates_by_month(decay_rates_df, breakpoints, forecast_horizon=
                          Default is 500 months (approx. 41.7 years)
     
     Returns:
-        list: List of decay rates, with one value per month up to forecast_horizon
+        list: List of track decay rates, with one value per month up to forecast_horizon
     
     Notes:
         - The function finds which segment each month belongs to based on breakpoints

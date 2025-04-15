@@ -65,7 +65,7 @@ from utils.decay_models import (
 
 # Import decay rate adjustment functions
 from utils.decay_models.parameter_updates import (
-    generate_decay_rates_by_month,
+    generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_decay_rates_with_observed_data,
     segment_decay_rates
@@ -330,34 +330,33 @@ with tab1:
                 months_since_release = song_data['months_since_release']
                 monthly_averages = song_data['monthly_averages']
                 
-                # Convert back to numpy arrays if needed for the fitting function
-                if isinstance(months_since_release, list):
-                    months_since_release = np.array(months_since_release)
-                if isinstance(monthly_averages, list):
-                    monthly_averages = np.array(monthly_averages)
-
                 # ===== 4. FIT DECAY MODEL TO STREAM DATA =====
                 params = fit_segment(months_since_release, monthly_averages)
                 S0, fitted_decay_k = params
                 
-                # Generate decay rates for all forecast months using the new function
-                monthly_decay_rates = generate_decay_rates_by_month(decay_rates_df, breakpoints)
+                # Generate track-specific decay rates for all forecast months 
+                # These rates model how this individual track's streams will decline over time,
+                # distinct from the artist-level decay rates calculated in the previous section
+                track_monthly_decay_rates = generate_track_decay_rates_by_month(decay_rates_df, breakpoints)
                 
-                # Create a DataFrame with months and model-derived decay rates
-                start_month = min(months_since_release)
-                end_month = max(months_since_release)
-                decay_rate_df = create_decay_rate_dataframe(
+                # Determine the observed time range from the track's streaming data
+                track_data_start_month = min(months_since_release)
+                track_data_end_month = max(months_since_release)
+                
+                # Create a structured DataFrame that combines model-derived decay rates with observed data
+                # This DataFrame is critical for adjusting theoretical decay curves with actual observed patterns
+                track_decay_rate_df = create_decay_rate_dataframe(
                     months_since_release=list(range(1, 501)),
-                    monthly_decay_rates=monthly_decay_rates,
-                    observed_decay_rate=mldr,
-                    observed_start_month=start_month,
-                    observed_end_month=end_month
+                    monthly_decay_rates=track_monthly_decay_rates,
+                    observed_decay_rate=mldr,  # This is the artist-level decay rate from listener analysis
+                    observed_start_month=track_data_start_month,  # Track-specific observation period start
+                    observed_end_month=track_data_end_month       # Track-specific observation period end
                 )
                 
                 # ===== 5. ADJUST DECAY RATES BASED ON OBSERVED DATA =====
                 # Apply a two-stage adjustment using observed data
                 adjusted_decay_df, adjustment_info = adjust_decay_rates_with_observed_data(
-                    decay_rate_df, 
+                    track_decay_rate_df, 
                     fit_parameter_k=fitted_decay_k
                 )
                 

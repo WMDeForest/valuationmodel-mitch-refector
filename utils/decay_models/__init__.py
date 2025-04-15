@@ -55,7 +55,7 @@ from utils.decay_models.fitting import fit_decay_curve, fit_segment, analyze_lis
 from utils.decay_models.parameter_updates import (
     update_fitted_params, 
     get_decay_parameters,
-    generate_decay_rates_by_month,
+    generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_decay_rates_with_observed_data,
     segment_decay_rates
@@ -75,7 +75,7 @@ __all__ = [
     'update_fitted_params',
     'get_decay_parameters',
     'forecast_values',
-    'generate_decay_rates_by_month',
+    'generate_track_decay_rates_by_month',
     'create_decay_rate_dataframe',
     'adjust_decay_rates_with_observed_data',
     'segment_decay_rates',
