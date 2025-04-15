@@ -54,4 +54,4 @@ fitted_params = [
 fitted_params_df = pd.DataFrame(fitted_params)
 
 # Define breakpoints for segments
-breakpoints = [1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 36, 48, 100000] 
+track_lifecycle_segment_boundaries = [1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 36, 48, 100000] 

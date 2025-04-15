@@ -23,8 +23,8 @@ def fit_segment(months_since_release, streams):
     are positive values, which makes physical sense for music streaming patterns.
     
     Args:
-        months_since_release: Array of months since release (time values)
-        streams: Array of stream counts corresponding to each month
+        months_since_release: Array or list of months since release (time values)
+        streams: Array or list of stream counts corresponding to each month
         
     Returns:
         tuple: (S0, k) parameters for the fitted model where:
@@ -37,6 +37,12 @@ def fit_segment(months_since_release, streams):
         The initial guess for optimization starts with the first data point as S0 and a small
         decay rate (0.01) that is typical for music streaming.
     """
+    # Convert inputs to numpy arrays if they're lists
+    if isinstance(months_since_release, list):
+        months_since_release = np.array(months_since_release)
+    if isinstance(streams, list):
+        streams = np.array(streams)
+        
     # Set initial parameter guess based on first observed stream count and typical decay rate
     initial_guess = [streams[0], 0.01]  
     
