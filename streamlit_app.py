@@ -67,7 +67,7 @@ from utils.decay_models import (
 from utils.decay_models.parameter_updates import (
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
-    adjust_decay_rates_with_observed_data,
+    adjust_track_decay_rates,
     segment_decay_rates
 )
 
@@ -353,20 +353,20 @@ with tab1:
                     track_data_end_month=track_data_end_month       # Last month we have actual track streaming data
                 )
                 
-                # ===== 5. ADJUST DECAY RATES BASED ON OBSERVED DATA =====
-                # Apply a two-stage adjustment using observed data
-                adjusted_decay_df, adjustment_info = adjust_decay_rates_with_observed_data(
+                # ===== 5. ADJUST TRACK DECAY RATES BASED ON OBSERVED DATA =====
+                # Apply a two-stage adjustment using observed artist and track data
+                adjusted_track_decay_df, track_adjustment_info = adjust_track_decay_rates(
                     track_decay_rate_df, 
-                    fit_parameter_k=fitted_decay_k
+                    fit_parameter_k=fitted_decay_k  # Track-specific fitted decay parameter
                 )
                 
-                # Store adjustment weight for later reference
-                weight = adjustment_info['first_adjustment_weight']
-                average_percent_change = adjustment_info['first_average_percent_change']
+                # Store track adjustment metrics for reporting and quality analysis
+                track_adjustment_weight = track_adjustment_info['first_adjustment_weight']
+                track_average_percent_change = track_adjustment_info['first_average_percent_change']
                 
                 # ===== 6. SEGMENT DECAY RATES BY TIME PERIOD =====
                 # Calculate average decay rates for each segment
-                consolidated_df = segment_decay_rates(adjusted_decay_df, breakpoints)
+                consolidated_df = segment_decay_rates(adjusted_track_decay_df, breakpoints)
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
                 initial_value = track_streams_last_30days
@@ -471,8 +471,8 @@ with tab1:
 
                 weights_and_changes.append({
                     'track_name': selected_song,
-                    'weight': weight,
-                    'average_percent_change': average_percent_change
+                    'weight': track_adjustment_weight,
+                    'average_percent_change': track_average_percent_change
                 })
 
                 # ===== 13. AGGREGATE MONTHLY DATA INTO YEARLY PERIODS =====

@@ -196,27 +196,28 @@ def create_decay_rate_dataframe(track_months_since_release, track_monthly_decay_
     
     return decay_df
 
-def adjust_decay_rates_with_observed_data(decay_df, fit_parameter_k=None):
+def adjust_track_decay_rates(track_decay_df, fit_parameter_k=None):
     """
-    Adjust theoretical decay rates using observed data for more accurate forecasting.
+    Adjust theoretical track decay rates using observed data for more accurate forecasting.
     
     This function performs a two-step adjustment process:
-    1. First adjustment: Analyzes difference between theoretical and observed decay rates
+    1. First adjustment: Analyzes difference between theoretical and artist-observed decay rates (MLDR)
        and applies a weighted adjustment based on the direction of difference
     2. Second adjustment: Compares the first adjustment with fitted decay rates from actual
-       streaming data and applies another weighted adjustment
+       track streaming data and applies another weighted adjustment
     
     The weighting approach helps balance theoretical models with real-world behavior.
     
     Args:
-        decay_df: DataFrame with months and corresponding decay rates
-                 Must contain 'decay_rate' column and optionally 'mldr' column
-        fit_parameter_k: Decay rate parameter from exponential curve fitting
+        track_decay_df: DataFrame with track months and corresponding decay rates
+                      Must contain 'decay_rate' column and optionally 'mldr' column
+        fit_parameter_k: Decay rate parameter from exponential curve fitting of track data
                         Only used for second-level adjustment if provided
     
     Returns:
-        pandas.DataFrame: DataFrame with adjusted decay rates
-                         Contains additional columns for diagnostic information
+        tuple: (adjusted_df, adjustment_info) where:
+               - adjusted_df is the DataFrame with adjusted track decay rates
+               - adjustment_info is a dictionary with metrics about the adjustments made
     
     Notes:
         - Positive differences (observed > theoretical) lead to adjustments
@@ -225,7 +226,7 @@ def adjust_decay_rates_with_observed_data(decay_df, fit_parameter_k=None):
         - Clean-up is performed to remove intermediate calculation columns
     """
     # Deep copy to avoid modifying the original DataFrame
-    adjusted_df = decay_df.copy()
+    adjusted_df = track_decay_df.copy()
     
     # First adjustment: Compare observed vs. theoretical decay rates
     if 'mldr' in adjusted_df.columns:

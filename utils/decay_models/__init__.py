@@ -57,7 +57,7 @@ from utils.decay_models.parameter_updates import (
     get_decay_parameters,
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
-    adjust_decay_rates_with_observed_data,
+    adjust_track_decay_rates,
     segment_decay_rates
 )
 from utils.decay_models.forecasting import forecast_values
@@ -77,7 +77,7 @@ __all__ = [
     'forecast_values',
     'generate_track_decay_rates_by_month',
     'create_decay_rate_dataframe',
-    'adjust_decay_rates_with_observed_data',
+    'adjust_track_decay_rates',
     'segment_decay_rates',
     # For backward compatibility
     'calculate_decay_rate',
