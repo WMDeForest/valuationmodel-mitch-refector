@@ -318,7 +318,7 @@ with tab1:
             # Initialize data structures to store results
             years_plot = []
             export_track_streams_forecast = pd.DataFrame()
-            stream_forecasts = []
+            track_valuation_summaries = []
             weights_and_changes = []
 
             # Process each selected song
@@ -437,19 +437,19 @@ with tab1:
                 )
                 
                 # Calculate total discounted and non-discounted values
-                new_forecast_value = monthly_track_revenue_projections_df['DISC'].sum()
-                forecast_OG = monthly_track_revenue_projections_df['Total'].sum()
-                Total_Value = new_forecast_value + historical_royalty_value_time_adjusted
+                discounted_future_royalty_value = monthly_track_revenue_projections_df['DISC'].sum()
+                undiscounted_future_royalty_value = monthly_track_revenue_projections_df['Total'].sum()
+                total_track_valuation = discounted_future_royalty_value + historical_royalty_value_time_adjusted
 
                 # ===== 12. STORE FORECAST SUMMARY =====
-                stream_forecasts.append({
+                track_valuation_summaries.append({
                     'track_name': selected_song,
                     'historical_streams': total_historical_track_streams,
                     'forecast_streams': total_track_streams_forecast,
-                    'hist_value': historical_royalty_value_time_adjusted,
-                    'forecast_no_disc': forecast_OG,
-                    'forecast_disc': new_forecast_value,
-                    'total_value': Total_Value,
+                    'historical_royalty_value': historical_royalty_value_time_adjusted,
+                    'undiscounted_future_royalty': undiscounted_future_royalty_value,
+                    'discounted_future_royalty': discounted_future_royalty_value,
+                    'total_track_valuation': total_track_valuation,
                 })
 
                 weights_and_changes.append({
@@ -476,7 +476,7 @@ with tab1:
             # Combine yearly data and calculate annual totals
             years_plot_df = pd.concat(years_plot)
             yearly_disc_sum_df = years_plot_df.groupby('Year')['DISC'].sum().reset_index()
-            df_forecasts = pd.DataFrame(stream_forecasts)
+            df_forecasts = pd.DataFrame(track_valuation_summaries)
 
             # ===== 15. OWNERSHIP ADJUSTMENTS =====
             # Merge forecast data with ownership information
@@ -487,15 +487,15 @@ with tab1:
             merged_df['Ownership(%)'] = pd.to_numeric(merged_df['Ownership(%)'], errors='coerce').fillna(1)
             
             # Adjust historical value based on MLC claims and ownership percentage
-            merged_df['hist_value'] = merged_df.apply(
-                lambda row: min((1 - row['MLC Claimed(%)']) * row['hist_value'], row['Ownership(%)'] * row['hist_value']),
+            merged_df['historical_royalty_value'] = merged_df.apply(
+                lambda row: min((1 - row['MLC Claimed(%)']) * row['historical_royalty_value'], row['Ownership(%)'] * row['historical_royalty_value']),
                 axis=1
             )
             
             # Adjust forecast values based on ownership percentage
-            merged_df['forecast_no_disc'] = merged_df['forecast_no_disc'].astype(float) * (merged_df['Ownership(%)'])
-            merged_df['forecast_disc'] = merged_df['forecast_disc'].astype(float) * (merged_df['Ownership(%)'])
-            merged_df['total_value'] = merged_df['forecast_disc'] + merged_df['hist_value']
+            merged_df['undiscounted_future_royalty'] = merged_df['undiscounted_future_royalty'].astype(float) * (merged_df['Ownership(%)'])
+            merged_df['discounted_future_royalty'] = merged_df['discounted_future_royalty'].astype(float) * (merged_df['Ownership(%)'])
+            merged_df['total_track_valuation'] = merged_df['discounted_future_royalty'] + merged_df['historical_royalty_value']
             merged_df = merged_df.drop(columns=['Ownership(%)', 'MLC Claimed(%)'])
             
             # ===== 16. DISPLAY FORMATTING =====
@@ -504,10 +504,10 @@ with tab1:
             
             df_forecasts['historical_streams'] = df_forecasts['historical_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
             df_forecasts['forecast_streams'] = df_forecasts['forecast_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            df_forecasts['forecast_no_disc'] = df_forecasts['forecast_no_disc'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['forecast_disc'] = df_forecasts['forecast_disc'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['hist_value'] = df_forecasts['hist_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['total_value'] = df_forecasts['total_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['undiscounted_future_royalty'] = df_forecasts['undiscounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['discounted_future_royalty'] = df_forecasts['discounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['historical_royalty_value'] = df_forecasts['historical_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            df_forecasts['total_track_valuation'] = df_forecasts['total_track_valuation'].astype(float).apply(lambda x: f"${int(round(x)):,}")
 
             # Display the formatted forecast table
             st.write(df_forecasts)
@@ -515,12 +515,12 @@ with tab1:
             # ===== 17. SUMMARY STATISTICS =====
             # Calculate summary totals across all tracks
             sum_df = pd.DataFrame({
-                'Metric': ['hist_value', 'forecast_OG','forecast_dis', 'total_value'],
+                'Metric': ['Historical Value', 'Undiscounted Future Value', 'Discounted Future Value', 'Total Valuation'],
                 'Sum': [
-                    df_forecasts['hist_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['forecast_no_disc'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['forecast_disc'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['total_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
+                    df_forecasts['historical_royalty_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    df_forecasts['undiscounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    df_forecasts['discounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    df_forecasts['total_track_valuation'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
                 ]
             })
 
