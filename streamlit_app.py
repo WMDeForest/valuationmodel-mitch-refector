@@ -316,10 +316,9 @@ with tab1:
         # ===== RUN BUTTON =====
         if st.button('Run All'):
             # Initialize data structures to store results
-            years_plot = []
+            track_yearly_revenue_collection = []
             export_track_streams_forecast = pd.DataFrame()
             track_valuation_summaries = []
-            weights_and_changes = []
 
             # Process each selected song
             for selected_song in selected_songs:
@@ -452,35 +451,30 @@ with tab1:
                     'total_track_valuation': total_track_valuation,
                 })
 
-                weights_and_changes.append({
-                    'track_name': selected_song,
-                    'weight': track_adjustment_weight,
-                    'average_percent_change': track_average_percent_change
-                })
-
                 # ===== 13. AGGREGATE MONTHLY DATA INTO YEARLY PERIODS =====
                 # Use utility function to aggregate monthly projections into yearly periods
-                aggregated_df = aggregate_into_yearly_periods(monthly_track_revenue_projections_df)
+                yearly_track_revenue_df = aggregate_into_yearly_periods(monthly_track_revenue_projections_df)
                 
                 # Store yearly aggregated data for plotting
-                years_plot.append(aggregated_df)
+                track_yearly_revenue_collection.append(yearly_track_revenue_df)
 
             # ===== 14. DATA EXPORT AND AGGREGATION =====
-            # Prepare forecast data for download
-            catalog_to_download = export_track_streams_forecast
-            csv = catalog_to_download.to_csv(index=False)
+            # Create downloadable CSV file of track stream forecasts
+            csv = export_track_streams_forecast.to_csv(index=False)
             b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="export_track_streams_forecast.csv">Download Track Streams Forecast</a>'
-            st.markdown(href, unsafe_allow_html=True)
+            download_link = f'<a href="data:file/csv;base64,{b64}" download="track_streams_forecast.csv">Download Track Streams Forecast</a>'
+            st.markdown(download_link, unsafe_allow_html=True)
             
-            # Combine yearly data and calculate annual totals
-            years_plot_df = pd.concat(years_plot)
-            yearly_disc_sum_df = years_plot_df.groupby('Year')['DISC'].sum().reset_index()
-            df_forecasts = pd.DataFrame(track_valuation_summaries)
+            # Combine track revenue data across all tracks and summarize by year
+            yearly_revenue_combined_df = pd.concat(track_yearly_revenue_collection)
+            yearly_total_by_year_df = yearly_revenue_combined_df.groupby('Year')['DISC'].sum().reset_index()
+            
+            # Convert track valuation summaries to DataFrame for display
+            track_valuation_results_df = pd.DataFrame(track_valuation_summaries)
 
             # ===== 15. OWNERSHIP ADJUSTMENTS =====
             # Merge forecast data with ownership information
-            merged_df = df_forecasts.merge(ownership_df[['track_name', 'MLC Claimed(%)', 'Ownership(%)']], on='track_name', how='left')
+            merged_df = track_valuation_results_df.merge(ownership_df[['track_name', 'MLC Claimed(%)', 'Ownership(%)']], on='track_name', how='left')
 
             # Ensure ownership percentages are properly formatted
             merged_df['MLC Claimed(%)'] = pd.to_numeric(merged_df['MLC Claimed(%)'], errors='coerce').fillna(0)
@@ -500,27 +494,27 @@ with tab1:
             
             # ===== 16. DISPLAY FORMATTING =====
             # Format values for presentation with commas and currency symbols
-            df_forecasts = merged_df
+            final_valuation_display_df = merged_df
             
-            df_forecasts['historical_streams'] = df_forecasts['historical_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            df_forecasts['forecast_streams'] = df_forecasts['forecast_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-            df_forecasts['undiscounted_future_royalty'] = df_forecasts['undiscounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['discounted_future_royalty'] = df_forecasts['discounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['historical_royalty_value'] = df_forecasts['historical_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-            df_forecasts['total_track_valuation'] = df_forecasts['total_track_valuation'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            final_valuation_display_df['historical_streams'] = final_valuation_display_df['historical_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
+            final_valuation_display_df['forecast_streams'] = final_valuation_display_df['forecast_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
+            final_valuation_display_df['undiscounted_future_royalty'] = final_valuation_display_df['undiscounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            final_valuation_display_df['discounted_future_royalty'] = final_valuation_display_df['discounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            final_valuation_display_df['historical_royalty_value'] = final_valuation_display_df['historical_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+            final_valuation_display_df['total_track_valuation'] = final_valuation_display_df['total_track_valuation'].astype(float).apply(lambda x: f"${int(round(x)):,}")
 
             # Display the formatted forecast table
-            st.write(df_forecasts)
+            st.write(final_valuation_display_df)
 
             # ===== 17. SUMMARY STATISTICS =====
             # Calculate summary totals across all tracks
             sum_df = pd.DataFrame({
                 'Metric': ['Historical Value', 'Undiscounted Future Value', 'Discounted Future Value', 'Total Valuation'],
                 'Sum': [
-                    df_forecasts['historical_royalty_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['undiscounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['discounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
-                    df_forecasts['total_track_valuation'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
+                    final_valuation_display_df['historical_royalty_value'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    final_valuation_display_df['undiscounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    final_valuation_display_df['discounted_future_royalty'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum(),
+                    final_valuation_display_df['total_track_valuation'].apply(lambda x: int(x.replace('$', '').replace(',', ''))).sum()
                 ]
             })
 
@@ -582,18 +576,18 @@ with tab1:
             # Create bar chart for yearly revenue projection
             fig, ax = plt.subplots()
             bar_color = 'teal'
-            bars = ax.bar(yearly_disc_sum_df['Year'], yearly_disc_sum_df['DISC'], color=bar_color)
+            bars = ax.bar(yearly_total_by_year_df['Year'], yearly_total_by_year_df['DISC'], color=bar_color)
 
             # Configure chart appearance
             ax.set_xlabel('Year')
             ax.set_title('Income by Year (discounted)')
             ax.set_ylabel('')
             ax.yaxis.set_visible(False)
-            max_value = yearly_disc_sum_df['DISC'].max()
+            max_value = yearly_total_by_year_df['DISC'].max()
             ax.set_ylim(0, max_value * 1.25)
 
             # Add value labels to bars
-            for bar, value in zip(bars, yearly_disc_sum_df['DISC']):
+            for bar, value in zip(bars, yearly_total_by_year_df['DISC']):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width() / 2, height, f'${int(value)}', 
                         va='bottom', ha='center', fontsize=10, color='black')
