@@ -77,7 +77,9 @@ from utils.ui_functions import (
     display_track_selection_ui, 
     display_financial_parameters_ui, 
     display_valuation_results,
-    display_valuation_summary
+    display_valuation_summary,
+    create_country_distribution_chart,
+    create_yearly_revenue_chart
 )
 
 # Import financial parameters
@@ -100,11 +102,11 @@ from utils.forecast_projections import (
 # Import geographic analysis functions
 from utils.geographic_analysis import (
     process_country_breakdown,
-    get_top_countries,
-    create_country_distribution_chart,
-    create_yearly_revenue_chart,
-    detect_streaming_fraud
+    get_top_countries
 )
+
+# Import fraud detection
+from utils.fraud_detection import detect_streaming_fraud
 
 # ===== MODELING FUNCTIONS =====
 
