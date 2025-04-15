@@ -237,6 +237,25 @@ with tab1:
             track_streams_last_90days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 90)
             track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
             
+            # Pre-calculate time-based metrics to avoid recalculating after Run All button
+            months_since_release_total = calculate_months_since_release(data_start_date)
+            
+            # Calculate monthly averages for different time periods
+            monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month = calculate_monthly_stream_averages(
+                track_streams_last_30days,
+                track_streams_last_90days,
+                track_streams_last_365days,
+                months_since_release_total
+            )
+            
+            # Prepare arrays for decay rate fitting
+            months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
+                months_since_release_total,
+                monthly_avg_12_months,
+                monthly_avg_3_months,
+                monthly_avg_last_month
+            )
+            
             # Create a single row DataFrame containing all key metrics for this track
             track_data = pd.DataFrame({
                 'track_name': [track_name_unique],
@@ -244,7 +263,13 @@ with tab1:
                 'track_streams_last_30days': [track_streams_last_30days],
                 'track_streams_last_90days': [track_streams_last_90days],
                 'track_streams_last_365days': [track_streams_last_365days],
-                'total_track_streams': [total_track_streams]
+                'total_track_streams': [total_track_streams],
+                'months_since_release_total': [months_since_release_total],
+                'monthly_avg_12_months': [monthly_avg_12_months],
+                'monthly_avg_3_months': [monthly_avg_3_months], 
+                'monthly_avg_last_month': [monthly_avg_last_month],
+                'months_since_release': [months_since_release.tolist() if hasattr(months_since_release, 'tolist') else months_since_release],
+                'monthly_averages': [monthly_averages.tolist() if hasattr(monthly_averages, 'tolist') else monthly_averages]
             })
             
             # Add this track's data to our catalog of all tracks
@@ -302,23 +327,19 @@ with tab1:
                 )
                 
                 # ===== 3. CALCULATE TIME SINCE RELEASE AND AVERAGE STREAMS =====
-                months_since_release_total = calculate_months_since_release(data_start_date)
+                months_since_release_total = song_data['months_since_release_total']
                 
                 # Calculate monthly averages for different time periods
-                monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month = calculate_monthly_stream_averages(
-                    track_streams_last_30days,
-                    track_streams_last_90days,
-                    track_streams_last_365days,
-                    months_since_release_total
-                )
+                monthly_avg_12_months, monthly_avg_3_months, monthly_avg_last_month = song_data['monthly_avg_12_months'], song_data['monthly_avg_3_months'], song_data['monthly_avg_last_month']
 
                 # Prepare arrays for decay rate fitting
-                months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
-                    months_since_release_total,
-                    monthly_avg_12_months,
-                    monthly_avg_3_months,
-                    monthly_avg_last_month
-                )
+                months_since_release, monthly_averages = song_data['months_since_release'], song_data['monthly_averages']
+                
+                # Convert back to numpy arrays if needed for the fitting function
+                if isinstance(months_since_release, list):
+                    months_since_release = np.array(months_since_release)
+                if isinstance(monthly_averages, list):
+                    monthly_averages = np.array(monthly_averages)
 
                 # ===== 4. FIT DECAY MODEL TO STREAM DATA =====
                 params = fit_segment(months_since_release, monthly_averages)
