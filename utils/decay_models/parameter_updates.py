@@ -196,7 +196,7 @@ def create_decay_rate_dataframe(track_months_since_release, track_monthly_decay_
     
     return decay_df
 
-def adjust_track_decay_rates(track_decay_df, fit_parameter_k=None):
+def adjust_track_decay_rates(track_decay_df, track_decay_k=None):
     """
     Adjust theoretical track decay rates using observed data for more accurate forecasting.
     
@@ -211,7 +211,7 @@ def adjust_track_decay_rates(track_decay_df, fit_parameter_k=None):
     Args:
         track_decay_df: DataFrame with track months and corresponding decay rates
                       Must contain 'decay_rate' column and optionally 'mldr' column
-        fit_parameter_k: Decay rate parameter from exponential curve fitting of track data
+        track_decay_k: Decay rate parameter from exponential curve fitting of track data
                         Only used for second-level adjustment if provided
     
     Returns:
@@ -254,12 +254,12 @@ def adjust_track_decay_rates(track_decay_df, fit_parameter_k=None):
         average_percent_change = 0
     
     # Second adjustment: If fitted parameter is available, apply another adjustment
-    if fit_parameter_k is not None and 'mldr' in adjusted_df.columns:
+    if track_decay_k is not None and 'mldr' in adjusted_df.columns:
         # Get indices of months with observed data
         observed_months_mask = ~adjusted_df['mldr'].isna()
         
         # Add fitted decay rate to observed period
-        adjusted_df.loc[observed_months_mask, 'new_decay_rate'] = fit_parameter_k
+        adjusted_df.loc[observed_months_mask, 'new_decay_rate'] = track_decay_k
         
         # Compare adjusted decay rate with newly fitted rate
         adjusted_df['percent_change_new_vs_adjusted'] = ((adjusted_df['new_decay_rate'] - 
@@ -284,8 +284,8 @@ def adjust_track_decay_rates(track_decay_df, fit_parameter_k=None):
     adjustment_info = {
         'first_adjustment_weight': adjustment_weight,
         'first_average_percent_change': average_percent_change,
-        'second_adjustment_weight': second_adjustment_weight if fit_parameter_k is not None else 0,
-        'second_average_percent_change': average_percent_change_new_vs_adjusted if fit_parameter_k is not None else 0
+        'second_adjustment_weight': second_adjustment_weight if track_decay_k is not None else 0,
+        'second_average_percent_change': average_percent_change_new_vs_adjusted if track_decay_k is not None else 0
     }
     
     # Clean up intermediate calculation columns
@@ -300,7 +300,7 @@ def adjust_track_decay_rates(track_decay_df, fit_parameter_k=None):
     
     return adjusted_df, adjustment_info
 
-def segment_decay_rates(adjusted_df, breakpoints):
+def calculate_track_decay_rates_by_segment(adjusted_df, breakpoints):
     """
     Calculate average decay rates for each segment defined by breakpoints.
     
@@ -347,9 +347,9 @@ def segment_decay_rates(adjusted_df, breakpoints):
         avg_decay_rates.append(avg_decay_rate)
 
     # Create consolidated DataFrame with segment numbers and decay rates
-    consolidated_df = pd.DataFrame({
+    segmented_track_decay_rates_df = pd.DataFrame({
         'segment': segments,
         'k': avg_decay_rates
     })
     
-    return consolidated_df 
+    return segmented_track_decay_rates_df 

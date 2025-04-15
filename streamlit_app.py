@@ -68,7 +68,7 @@ from utils.decay_models.parameter_updates import (
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_track_decay_rates,
-    segment_decay_rates
+    calculate_track_decay_rates_by_segment
 )
 
 # Import UI functions
@@ -332,7 +332,7 @@ with tab1:
                 
                 # ===== 4. FIT DECAY MODEL TO STREAM DATA =====
                 params = fit_segment(track_months_since_release, monthly_averages)
-                S0, fitted_decay_k = params
+                S0, track_decay_k = params
                 
                 # Generate track-specific decay rates for all forecast months 
                 # These rates model how this individual track's streams will decline over time,
@@ -357,7 +357,7 @@ with tab1:
                 # Apply a two-stage adjustment using observed artist and track data
                 adjusted_track_decay_df, track_adjustment_info = adjust_track_decay_rates(
                     track_decay_rate_df, 
-                    fit_parameter_k=fitted_decay_k  # Track-specific fitted decay parameter
+                    track_decay_k=track_decay_k  # Track-specific fitted decay parameter
                 )
                 
                 # Store track adjustment metrics for reporting and quality analysis
@@ -366,14 +366,14 @@ with tab1:
                 
                 # ===== 6. SEGMENT DECAY RATES BY TIME PERIOD =====
                 # Calculate average decay rates for each segment
-                consolidated_df = segment_decay_rates(adjusted_track_decay_df, breakpoints)
+                segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(adjusted_track_decay_df, breakpoints)
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
                 initial_value = track_streams_last_30days
                 # Retrieve months since release for forecast period calculation
                 start_period = song_data['months_since_release_total']
 
-                forecasts = forecast_values(consolidated_df, initial_value, start_period, DEFAULT_FORECAST_PERIODS)
+                forecasts = forecast_values(segmented_track_decay_rates_df, initial_value, start_period, DEFAULT_FORECAST_PERIODS)
 
                 # Convert forecasts to a DataFrame
                 forecasts_df = pd.DataFrame(forecasts)
