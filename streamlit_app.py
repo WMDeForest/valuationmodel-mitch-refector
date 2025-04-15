@@ -82,6 +82,9 @@ from utils.financial_parameters import (
     HISTORICAL_VALUE_TIME_ADJUSTMENT
 )
 
+# Import historical value calculation function
+from utils.historical_royalty_revenue import calculate_historical_royalty_revenue
+
 # Define cutoff date for historical valuations
 HISTORICAL_VALUATION_CUTOFF = '2024-02'
 
@@ -322,7 +325,7 @@ with tab1:
                 track_streams_last_365days = song_data['track_streams_last_365days']
                 track_streams_last_90days = song_data['track_streams_last_90days']
                 track_streams_last_30days = song_data['track_streams_last_30days']
-                historical = song_data['total_track_streams']
+                total_historical_track_streams = song_data['total_track_streams']
                 
                 # Get both date formats - we need raw format for months calculation
                 earliest_track_date = song_data['earliest_track_date']  # Original DD/MM/YYYY format
@@ -408,13 +411,17 @@ with tab1:
                 # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
                 mask = (mechanical_royalty_rates_df['Date'] >= song_data['earliest_track_date_formatted']) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
                 
-                # Calculate historical value from streams
-                ad_supported = mechanical_royalty_rates_df.loc[mask, 'Spotify_Ad-supported'].mean()
-                premium = mechanical_royalty_rates_df.loc[mask, 'Spotify_Premium'].mean()
-                hist_ad = AD_SUPPORTED_STREAM_PERCENTAGE * historical * ad_supported
-                hist_prem = PREMIUM_STREAM_PERCENTAGE * historical * premium
-                hist_value = (hist_ad + hist_prem) * (listener_percentage_usa)
-                hist_value = hist_value / ((1 + discount_rate / 12) ** HISTORICAL_VALUE_TIME_ADJUSTMENT)  # Apply time value discount
+                # Calculate historical value using our dedicated function
+                historical_royalty_value_time_adjusted = calculate_historical_royalty_revenue(
+                    total_historical_track_streams=total_historical_track_streams,
+                    mechanical_royalty_rates_df=mechanical_royalty_rates_df,
+                    date_range_mask=mask,
+                    listener_percentage_usa=listener_percentage_usa,
+                    discount_rate=discount_rate,
+                    historical_value_time_adjustment=HISTORICAL_VALUE_TIME_ADJUSTMENT,
+                    premium_stream_percentage=PREMIUM_STREAM_PERCENTAGE,
+                    ad_supported_stream_percentage=AD_SUPPORTED_STREAM_PERCENTAGE
+                )
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
                 monthly_forecasts_df = pd.DataFrame({
@@ -467,14 +474,14 @@ with tab1:
                 # Calculate total discounted and non-discounted values
                 new_forecast_value = monthly_forecasts_df['DISC'].sum()
                 forecast_OG = monthly_forecasts_df['Total'].sum()
-                Total_Value = new_forecast_value + hist_value
+                Total_Value = new_forecast_value + historical_royalty_value_time_adjusted
 
                 # ===== 12. STORE FORECAST SUMMARY =====
                 stream_forecasts.append({
                     'track_name': selected_song,
-                    'historical_streams': historical,
+                    'historical_streams': total_historical_track_streams,
                     'forecast_streams': total_track_streams_forecast,
-                    'hist_value': hist_value,
+                    'hist_value': historical_royalty_value_time_adjusted,
                     'forecast_no_disc': forecast_OG,
                     'forecast_disc': new_forecast_value,
                     'total_value': Total_Value,
