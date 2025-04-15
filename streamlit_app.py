@@ -59,6 +59,9 @@ from utils.decay_models import (
     analyze_listener_decay
 )
 
+# Import UI functions
+from utils.ui_functions import display_track_selection_ui
+
 # ===== MODELING FUNCTIONS =====
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
@@ -242,11 +245,7 @@ with tab1:
         ownership_df = process_ownership_data(uploaded_file_ownership, track_catalog_df['track_name'])
         
         # ===== UI DISPLAY AND TRACK SELECTION =====
-        st.write("Data Preview:")
-        st.write(track_catalog_df)
-
-        songs = sorted(track_catalog_df['track_name'].unique(), key=lambda x: x.lower())
-        selected_songs = st.multiselect('Select Songs', songs, default=songs)
+        selected_songs = display_track_selection_ui(track_catalog_df)
         
         # ===== FINANCIAL PARAMETERS =====
         # Positioned here just before forecasting calculations
