@@ -327,11 +327,11 @@ with tab1:
                 
                 # ===== 3. RETRIEVE DECAY FITTING DATA FOR MODELING =====
                 # Get arrays for decay curve fitting (only the data needed immediately)
-                months_since_release = song_data['months_since_release']
+                track_months_since_release = song_data['months_since_release']
                 monthly_averages = song_data['monthly_averages']
                 
                 # ===== 4. FIT DECAY MODEL TO STREAM DATA =====
-                params = fit_segment(months_since_release, monthly_averages)
+                params = fit_segment(track_months_since_release, monthly_averages)
                 S0, fitted_decay_k = params
                 
                 # Generate track-specific decay rates for all forecast months 
@@ -340,17 +340,17 @@ with tab1:
                 track_monthly_decay_rates = generate_track_decay_rates_by_month(decay_rates_df, breakpoints)
                 
                 # Determine the observed time range from the track's streaming data
-                track_data_start_month = min(months_since_release)
-                track_data_end_month = max(months_since_release)
+                track_data_start_month = min(track_months_since_release)
+                track_data_end_month = max(track_months_since_release)
                 
                 # Create a structured DataFrame that combines model-derived decay rates with observed data
                 # This DataFrame is critical for adjusting theoretical decay curves with actual observed patterns
                 track_decay_rate_df = create_decay_rate_dataframe(
-                    months_since_release=list(range(1, 501)),
-                    monthly_decay_rates=track_monthly_decay_rates,
-                    observed_decay_rate=mldr,  # This is the artist-level decay rate from listener analysis
-                    observed_start_month=track_data_start_month,  # Track-specific observation period start
-                    observed_end_month=track_data_end_month       # Track-specific observation period end
+                    track_months_since_release=list(range(1, 501)),  # Forecast for 500 months (about 41.7 years) of track lifetime
+                    track_monthly_decay_rates=track_monthly_decay_rates,  # Using our track-specific decay rates
+                    mldr=mldr,  # Monthly Listener Decay Rate from artist-level analysis
+                    track_data_start_month=track_data_start_month,  # First month we have actual track streaming data
+                    track_data_end_month=track_data_end_month       # Last month we have actual track streaming data
                 )
                 
                 # ===== 5. ADJUST DECAY RATES BASED ON OBSERVED DATA =====

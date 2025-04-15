@@ -150,28 +150,30 @@ def generate_track_decay_rates_by_month(decay_rates_df, breakpoints, forecast_ho
                 
     return monthly_decay_rates
 
-def create_decay_rate_dataframe(months_since_release, monthly_decay_rates, observed_decay_rate=None, 
-                             observed_start_month=None, observed_end_month=None):
+def create_decay_rate_dataframe(track_months_since_release, track_monthly_decay_rates, mldr=None, 
+                             track_data_start_month=None, track_data_end_month=None):
     """
-    Create a DataFrame with months since release and corresponding decay rates.
+    Create a DataFrame with track months since release and corresponding decay rates.
     
     This function creates a structured DataFrame for all decay rate data,
     including both model-derived rates and observed rates from actual data.
     The DataFrame provides a foundation for further adjustments and analysis.
     
     Args:
-        months_since_release: List of integers representing months in the forecast
-        monthly_decay_rates: List of decay rates corresponding to each month
-        observed_decay_rate: Optional decay rate observed from actual data
-        observed_start_month: Start month of the observation period
-        observed_end_month: End month of the observation period
+        track_months_since_release: List of integers representing months since track release
+                                  Used for forecasting over the track's lifetime
+        track_monthly_decay_rates: List of track-specific decay rates corresponding to each month
+        mldr: Monthly Listener Decay Rate observed from artist listener data analysis
+              Used to incorporate artist-level decay patterns into track projections
+        track_data_start_month: Start month of track's actual streaming data observation period
+        track_data_end_month: End month of track's actual streaming data observation period
     
     Returns:
         pandas.DataFrame: DataFrame with months and corresponding decay rates
                          Includes columns for both model and observed rates
     
     Notes:
-        - When observed data is provided, the function adds the observed decay rate
+        - When MLDR data is provided, the function adds the observed decay rate
           to the months that fall within the observation period
         - This allows comparison between model-predicted decay and actual decay
     """
@@ -179,20 +181,20 @@ def create_decay_rate_dataframe(months_since_release, monthly_decay_rates, obser
     
     # Create the basic DataFrame with months and model-derived decay rates
     decay_df = pd.DataFrame({
-        'months_since_release': months_since_release,
-        'decay_rate': monthly_decay_rates
+        'months_since_release': track_months_since_release,
+        'decay_rate': track_monthly_decay_rates
     })
     
-    # If observed decay rate is provided, add it to the appropriate months
-    if observed_decay_rate is not None and observed_start_month is not None and observed_end_month is not None:
-        # Add column for observed decay rate (mldr = measured listener decay rate)
+    # If MLDR is provided, add it to the appropriate months
+    if mldr is not None and track_data_start_month is not None and track_data_end_month is not None:
+        # Add column for MLDR (Monthly Listener Decay Rate)
         decay_df['mldr'] = None
         
-        # Apply observed decay rate to the period where we have actual data
-        decay_df.loc[(decay_df['months_since_release'] >= observed_start_month) & 
-                    (decay_df['months_since_release'] <= observed_end_month), 'mldr'] = observed_decay_rate
+        # Apply MLDR to the period where we have actual track streaming data
+        decay_df.loc[(decay_df['months_since_release'] >= track_data_start_month) & 
+                    (decay_df['months_since_release'] <= track_data_end_month), 'mldr'] = mldr
     
-    return decay_df 
+    return decay_df
 
 def adjust_decay_rates_with_observed_data(decay_df, fit_parameter_k=None):
     """
