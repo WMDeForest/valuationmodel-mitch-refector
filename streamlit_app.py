@@ -60,7 +60,14 @@ from utils.decay_models import (
 )
 
 # Import UI functions
-from utils.ui_functions import display_track_selection_ui
+from utils.ui_functions import display_track_selection_ui, display_financial_parameters_ui
+
+# Import financial parameters
+from utils.financial_parameters import (
+    PREMIUM_STREAM_PERCENTAGE, 
+    AD_SUPPORTED_STREAM_PERCENTAGE,
+    HISTORICAL_VALUE_TIME_ADJUSTMENT
+)
 
 # ===== MODELING FUNCTIONS =====
 
@@ -406,10 +413,10 @@ with tab1:
                 # Calculate historical value from streams
                 ad_supported = df_additional.loc[mask, 'Spotify_Ad-supported'].mean()
                 premium = df_additional.loc[mask, 'Spotify_Premium'].mean()
-                hist_ad = 0.6 * historical * ad_supported
-                hist_prem = 0.4 * historical * premium
+                hist_ad = AD_SUPPORTED_STREAM_PERCENTAGE * historical * ad_supported
+                hist_prem = PREMIUM_STREAM_PERCENTAGE * historical * premium
                 hist_value = (hist_ad + hist_prem) * (listener_percentage_usa)
-                hist_value = hist_value / ((1 + discount_rate / 12) ** 3)  # Apply time value discount
+                hist_value = hist_value / ((1 + discount_rate / 12) ** HISTORICAL_VALUE_TIME_ADJUSTMENT)  # Apply time value discount
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
                 monthly_forecasts_df = pd.DataFrame({
