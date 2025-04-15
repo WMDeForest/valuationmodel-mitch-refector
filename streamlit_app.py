@@ -85,6 +85,12 @@ from utils.financial_parameters import (
 # Import historical value calculation function
 from utils.historical_royalty_revenue import calculate_historical_royalty_revenue, HISTORICAL_VALUATION_CUTOFF
 
+# Import forecast projections functions
+from utils.forecast_projections import (
+    create_monthly_track_revenue_projections,
+    aggregate_into_yearly_periods
+)
+
 # ===== MODELING FUNCTIONS =====
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
@@ -421,52 +427,14 @@ with tab1:
                 )
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
-                monthly_track_revenue_projections_df = pd.DataFrame({
-                    'track_name': [selected_song] * len(track_streams_forecast_df),
-                    'month': track_streams_forecast_df['month'],
-                    'predicted_streams_for_month': track_streams_forecast_df['predicted_streams_for_month']
-                })
-
-                # Add month index for time-based calculations
-                monthly_track_revenue_projections_df['month_index'] = monthly_track_revenue_projections_df.index + 1
-                
-                # ===== 10. APPLY GEOGRAPHIC DISTRIBUTION =====
-                # Add country percentage distributions
-                for index, row in listener_geography_df.iterrows():
-                    country = row['Country']
-                    percentage = row['Spotify monthly listeners (%)']
-                    monthly_track_revenue_projections_df[country + ' %'] = percentage
-
-                # Get country-specific royalty rates
-                for index, row in listener_geography_df.iterrows():
-                    country = row['Country']
-                    if country in worldwide_royalty_rates_df.columns:
-                        mean_final_5 = worldwide_royalty_rates_df[country].dropna().tail(5).mean()
-                        monthly_track_revenue_projections_df[country + ' Royalty Rate'] = mean_final_5
-
-                # Calculate country-specific stream values
-                for index, row in listener_geography_df.iterrows():
-                    country = row['Country']
-                    monthly_track_revenue_projections_df[country + ' Value'] = monthly_track_revenue_projections_df['predicted_streams_for_month'] * monthly_track_revenue_projections_df[country + ' %']
-
-                # Calculate country-specific royalty values
-                for index, row in listener_geography_df.iterrows():
-                    country = row['Country']
-                    monthly_track_revenue_projections_df[country + ' Royalty Value'] = monthly_track_revenue_projections_df[country + ' Value'] * monthly_track_revenue_projections_df[country + ' Royalty Rate']
-
-                # Clean up intermediate calculation columns
-                percentage_columns = [country + ' %' for country in listener_geography_df['Country']]
-                monthly_track_revenue_projections_df.drop(columns=percentage_columns, inplace=True)
-                
-                columns_to_drop = [country + ' Value' for country in listener_geography_df['Country']] + [country + ' Royalty Rate' for country in listener_geography_df['Country']]
-                monthly_track_revenue_projections_df.drop(columns=columns_to_drop, inplace=True)
-                
-                # ===== 11. CALCULATE TOTAL FORECAST VALUE =====
-                # Sum all country royalty values
-                monthly_track_revenue_projections_df['Total'] = monthly_track_revenue_projections_df[[country + ' Royalty Value' for country in listener_geography_df['Country']]].sum(axis=1)
-                
-                # Apply time value of money discount
-                monthly_track_revenue_projections_df['DISC'] = (monthly_track_revenue_projections_df['Total']) / ((1 + discount_rate / 12) ** (monthly_track_revenue_projections_df['month_index'] + 2.5))
+                # Use utility function to create projections DataFrame and apply geographic distribution
+                monthly_track_revenue_projections_df = create_monthly_track_revenue_projections(
+                    track_name=selected_song,
+                    track_streams_forecast_df=track_streams_forecast_df,
+                    listener_geography_df=listener_geography_df,
+                    worldwide_royalty_rates_df=worldwide_royalty_rates_df,
+                    discount_rate=discount_rate
+                )
                 
                 # Calculate total discounted and non-discounted values
                 new_forecast_value = monthly_track_revenue_projections_df['DISC'].sum()
@@ -491,48 +459,9 @@ with tab1:
                 })
 
                 # ===== 13. AGGREGATE MONTHLY DATA INTO YEARLY PERIODS =====
-                rows_per_period = 12
-                n_rows = len(monthly_track_revenue_projections_df)
+                # Use utility function to aggregate monthly projections into yearly periods
+                aggregated_df = aggregate_into_yearly_periods(monthly_track_revenue_projections_df)
                 
-                # Initialize period pattern for aggregation
-                period_pattern = []
-                
-                # First year (9 months)
-                period_pattern.extend([1] * 9)
-                
-                # Calculate remaining rows after first 9 months
-                remaining_rows = n_rows - 9
-                
-                # Assign remaining months to yearly periods (12 months per year)
-                for period in range(2, (remaining_rows // rows_per_period) + 2):
-                    period_pattern.extend([period] * rows_per_period)
-
-                # Ensure pattern length matches dataframe rows
-                if len(period_pattern) > n_rows:
-                    period_pattern = period_pattern[:n_rows]  # Trim if too long
-                else:
-                    period_pattern.extend([period] * (n_rows - len(period_pattern)))  # Extend if too short
-
-                # Assign periods to months
-                monthly_track_revenue_projections_df['Period'] = period_pattern
-
-                # Group data by period and aggregate
-                aggregated_df = monthly_track_revenue_projections_df.groupby('Period').agg({
-                    'track_name': 'first',
-                    'month': 'first',  # First month in each period
-                    'DISC': 'sum'      # Sum discounted values
-                }).reset_index(drop=True)
-
-                # Rename for clarity
-                aggregated_df.rename(columns={'month': 'Start_Month'}, inplace=True)
-
-                # Keep only first 10 years
-                aggregated_df = aggregated_df.head(10)
-
-                # Replace month numbers with year numbers
-                aggregated_df['Year'] = range(1, 11)
-                aggregated_df.drop(columns=['Start_Month'], inplace=True)
-
                 # Store yearly aggregated data for plotting
                 years_plot.append(aggregated_df)
 
