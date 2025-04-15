@@ -268,13 +268,22 @@ def calculate_monthly_stream_averages(streams_last_30days, streams_last_90days, 
         (avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3)
         Average streams per month for months 4-12 and 2-3
     """
-    # Calculate 3-month average (excluding last month)
+    # ===== MONTH 2-3 AVERAGE =====
+    # This calculates the average monthly streams for months 2-3 (days 31-90)
+    # We take the difference between 90-day streams and 30-day streams to isolate days 31-90
+    # Then divide by 2 months (or 1 month if the track is very new)
     avg_monthly_streams_months_2to3 = (streams_last_90days - streams_last_30days) / (2 if months_since_release > 2 else 1)
     
-    # Calculate 12-month average (excluding last 3 months)
+    # ===== MONTH 4-12 AVERAGE =====
+    # This calculates the average monthly streams for months 4-12 (days 91-365)
+    # We take the difference between 365-day streams and 90-day streams to isolate days 91-365
     if months_since_release > 3:
+        # If track is at least a year old, divide by 9 months (months 4-12)
+        # If track is 4-11 months old, divide by the actual number of months available
         avg_monthly_streams_months_4to12 = (streams_last_365days - streams_last_90days) / (9 if months_since_release > 11 else (months_since_release - 3))
     else:
+        # For very new tracks (less than 4 months), use the months 2-3 average as a proxy
+        # since we don't have enough data for a separate calculation
         avg_monthly_streams_months_4to12 = avg_monthly_streams_months_2to3
         
     return avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3
@@ -302,14 +311,24 @@ def prepare_decay_rate_fitting_data(months_since_release, avg_monthly_streams_mo
     """
     import numpy as np
     
-    # Create array of months for decay curve fitting
+    # ===== CREATE HISTORICAL DATA POINTS FOR DECAY CURVE FITTING =====
+    # This creates three data points at different points in the track's history:
+    # 1. A point representing month 12 (or earliest available if track is newer)
+    # 2. A point representing month 3 (or earliest available if track is newer)
+    # 3. A point representing the current month
+    # These three points will be used to fit an exponential decay curve
     months_array = np.array([
         max((months_since_release - 11), 0),  # 12 months ago (or 0 if track is newer)
         max((months_since_release - 2), 0),   # 3 months ago (or 0 if track is newer)
         months_since_release - 0              # Current month
     ])
     
-    # Create array of corresponding monthly stream averages
+    # ===== CREATE CORRESPONDING STREAM VALUES =====
+    # For each month in the months_array, we provide the corresponding stream value:
+    # 1. The avg monthly streams from months 4-12 for the first point
+    # 2. The avg monthly streams from months 2-3 for the second point 
+    # 3. The actual streams from the last 30 days for the current month
+    # This gives us a time series of points showing how stream volume has changed over time
     averages_array = np.array([avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3, streams_last_30days])
     
     return months_array, averages_array 

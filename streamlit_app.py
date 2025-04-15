@@ -325,14 +325,10 @@ with tab1:
                     SP_REACH
                 )
                 
-                # ===== 3. CALCULATE TIME SINCE RELEASE AND AVERAGE STREAMS =====
-                months_since_release_total = song_data['months_since_release_total']
-                
-                # Calculate monthly averages for different time periods
-                avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = song_data['avg_monthly_streams_months_4to12'], song_data['avg_monthly_streams_months_2to3']
-
-                # Prepare arrays for decay rate fitting
-                months_since_release, monthly_averages = song_data['months_since_release'], song_data['monthly_averages']
+                # ===== 3. RETRIEVE DECAY FITTING DATA FOR MODELING =====
+                # Get arrays for decay curve fitting (only the data needed immediately)
+                months_since_release = song_data['months_since_release']
+                monthly_averages = song_data['monthly_averages']
                 
                 # Convert back to numpy arrays if needed for the fitting function
                 if isinstance(months_since_release, list):
@@ -375,7 +371,8 @@ with tab1:
 
                 # ===== 7. GENERATE STREAM FORECASTS =====
                 initial_value = track_streams_last_30days
-                start_period = months_since_release_total
+                # Retrieve months since release for forecast period calculation
+                start_period = song_data['months_since_release_total']
 
                 forecasts = forecast_values(consolidated_df, initial_value, start_period, DEFAULT_FORECAST_PERIODS)
 
