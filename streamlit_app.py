@@ -94,15 +94,15 @@ population_df = get_population_data()
 
 # Load mechanical royalties data - contains historical royalty rates for Spotify streams
 # Used to calculate historical value and forecast financial projections
-df_additional = get_mech_data()
-if df_additional is None:
+mechanical_royalty_rates_df = get_mech_data()
+if mechanical_royalty_rates_df is None:
     st.error("Failed to load mechanical royalties data")
     st.stop()
 
 # Load worldwide rates data - contains country-specific royalty rates
 # Used to calculate revenue projections based on geographic streaming distribution
-GLOBAL = get_rates_data()
-if GLOBAL is None:
+worldwide_royalty_rates_df = get_rates_data()
+if worldwide_royalty_rates_df is None:
     st.error("Failed to load worldwide rates data")
     st.stop()
 
@@ -400,17 +400,17 @@ with tab1:
                 # For older tracks, use the valuation cutoff date
                 # For newer tracks, use the latest available data
                 if song_data['earliest_track_date_formatted'] >= HISTORICAL_VALUATION_CUTOFF:
-                    end_date = df_additional['Date'].max()
+                    royalty_calculation_end_date = mechanical_royalty_rates_df['Date'].max()
                 else:
-                    end_date = HISTORICAL_VALUATION_CUTOFF
+                    royalty_calculation_end_date = HISTORICAL_VALUATION_CUTOFF
                     
                 # Filter mechanical royalty data for relevant date range
                 # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
-                mask = (df_additional['Date'] >= song_data['earliest_track_date_formatted']) & (df_additional['Date'] <= end_date)
+                mask = (mechanical_royalty_rates_df['Date'] >= song_data['earliest_track_date_formatted']) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
                 
                 # Calculate historical value from streams
-                ad_supported = df_additional.loc[mask, 'Spotify_Ad-supported'].mean()
-                premium = df_additional.loc[mask, 'Spotify_Premium'].mean()
+                ad_supported = mechanical_royalty_rates_df.loc[mask, 'Spotify_Ad-supported'].mean()
+                premium = mechanical_royalty_rates_df.loc[mask, 'Spotify_Premium'].mean()
                 hist_ad = AD_SUPPORTED_STREAM_PERCENTAGE * historical * ad_supported
                 hist_prem = PREMIUM_STREAM_PERCENTAGE * historical * premium
                 hist_value = (hist_ad + hist_prem) * (listener_percentage_usa)
@@ -436,8 +436,8 @@ with tab1:
                 # Get country-specific royalty rates
                 for index, row in listener_geography_df.iterrows():
                     country = row['Country']
-                    if country in GLOBAL.columns:
-                        mean_final_5 = GLOBAL[country].dropna().tail(5).mean()
+                    if country in worldwide_royalty_rates_df.columns:
+                        mean_final_5 = worldwide_royalty_rates_df[country].dropna().tail(5).mean()
                         monthly_forecasts_df[country + ' Royalty Rate'] = mean_final_5
 
                 # Calculate country-specific stream values
