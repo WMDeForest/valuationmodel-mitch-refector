@@ -83,10 +83,7 @@ from utils.financial_parameters import (
 )
 
 # Import historical value calculation function
-from utils.historical_royalty_revenue import calculate_historical_royalty_revenue
-
-# Define cutoff date for historical valuations
-HISTORICAL_VALUATION_CUTOFF = '2024-02'
+from utils.historical_royalty_revenue import calculate_historical_royalty_revenue, HISTORICAL_VALUATION_CUTOFF
 
 # ===== MODELING FUNCTIONS =====
 
@@ -411,7 +408,7 @@ with tab1:
                 # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
                 mask = (mechanical_royalty_rates_df['Date'] >= song_data['earliest_track_date_formatted']) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
                 
-                # Calculate historical value using our dedicated function
+                # Calculate historical royalty value using our dedicated function
                 historical_royalty_value_time_adjusted = calculate_historical_royalty_revenue(
                     total_historical_track_streams=total_historical_track_streams,
                     mechanical_royalty_rates_df=mechanical_royalty_rates_df,
@@ -424,56 +421,56 @@ with tab1:
                 )
 
                 # ===== 9. PREPARE MONTHLY FORECAST DATA =====
-                monthly_forecasts_df = pd.DataFrame({
+                monthly_track_revenue_projections_df = pd.DataFrame({
                     'track_name': [selected_song] * len(track_streams_forecast_df),
                     'month': track_streams_forecast_df['month'],
                     'predicted_streams_for_month': track_streams_forecast_df['predicted_streams_for_month']
                 })
 
                 # Add month index for time-based calculations
-                monthly_forecasts_df['month_index'] = monthly_forecasts_df.index + 1
+                monthly_track_revenue_projections_df['month_index'] = monthly_track_revenue_projections_df.index + 1
                 
                 # ===== 10. APPLY GEOGRAPHIC DISTRIBUTION =====
                 # Add country percentage distributions
                 for index, row in listener_geography_df.iterrows():
                     country = row['Country']
                     percentage = row['Spotify monthly listeners (%)']
-                    monthly_forecasts_df[country + ' %'] = percentage
+                    monthly_track_revenue_projections_df[country + ' %'] = percentage
 
                 # Get country-specific royalty rates
                 for index, row in listener_geography_df.iterrows():
                     country = row['Country']
                     if country in worldwide_royalty_rates_df.columns:
                         mean_final_5 = worldwide_royalty_rates_df[country].dropna().tail(5).mean()
-                        monthly_forecasts_df[country + ' Royalty Rate'] = mean_final_5
+                        monthly_track_revenue_projections_df[country + ' Royalty Rate'] = mean_final_5
 
                 # Calculate country-specific stream values
                 for index, row in listener_geography_df.iterrows():
                     country = row['Country']
-                    monthly_forecasts_df[country + ' Value'] = monthly_forecasts_df['predicted_streams_for_month'] * monthly_forecasts_df[country + ' %']
+                    monthly_track_revenue_projections_df[country + ' Value'] = monthly_track_revenue_projections_df['predicted_streams_for_month'] * monthly_track_revenue_projections_df[country + ' %']
 
                 # Calculate country-specific royalty values
                 for index, row in listener_geography_df.iterrows():
                     country = row['Country']
-                    monthly_forecasts_df[country + ' Royalty Value'] = monthly_forecasts_df[country + ' Value'] * monthly_forecasts_df[country + ' Royalty Rate']
+                    monthly_track_revenue_projections_df[country + ' Royalty Value'] = monthly_track_revenue_projections_df[country + ' Value'] * monthly_track_revenue_projections_df[country + ' Royalty Rate']
 
                 # Clean up intermediate calculation columns
                 percentage_columns = [country + ' %' for country in listener_geography_df['Country']]
-                monthly_forecasts_df.drop(columns=percentage_columns, inplace=True)
+                monthly_track_revenue_projections_df.drop(columns=percentage_columns, inplace=True)
                 
                 columns_to_drop = [country + ' Value' for country in listener_geography_df['Country']] + [country + ' Royalty Rate' for country in listener_geography_df['Country']]
-                monthly_forecasts_df.drop(columns=columns_to_drop, inplace=True)
+                monthly_track_revenue_projections_df.drop(columns=columns_to_drop, inplace=True)
                 
                 # ===== 11. CALCULATE TOTAL FORECAST VALUE =====
                 # Sum all country royalty values
-                monthly_forecasts_df['Total'] = monthly_forecasts_df[[country + ' Royalty Value' for country in listener_geography_df['Country']]].sum(axis=1)
+                monthly_track_revenue_projections_df['Total'] = monthly_track_revenue_projections_df[[country + ' Royalty Value' for country in listener_geography_df['Country']]].sum(axis=1)
                 
                 # Apply time value of money discount
-                monthly_forecasts_df['DISC'] = (monthly_forecasts_df['Total']) / ((1 + discount_rate / 12) ** (monthly_forecasts_df['month_index'] + 2.5))
+                monthly_track_revenue_projections_df['DISC'] = (monthly_track_revenue_projections_df['Total']) / ((1 + discount_rate / 12) ** (monthly_track_revenue_projections_df['month_index'] + 2.5))
                 
                 # Calculate total discounted and non-discounted values
-                new_forecast_value = monthly_forecasts_df['DISC'].sum()
-                forecast_OG = monthly_forecasts_df['Total'].sum()
+                new_forecast_value = monthly_track_revenue_projections_df['DISC'].sum()
+                forecast_OG = monthly_track_revenue_projections_df['Total'].sum()
                 Total_Value = new_forecast_value + historical_royalty_value_time_adjusted
 
                 # ===== 12. STORE FORECAST SUMMARY =====
@@ -495,7 +492,7 @@ with tab1:
 
                 # ===== 13. AGGREGATE MONTHLY DATA INTO YEARLY PERIODS =====
                 rows_per_period = 12
-                n_rows = len(monthly_forecasts_df)
+                n_rows = len(monthly_track_revenue_projections_df)
                 
                 # Initialize period pattern for aggregation
                 period_pattern = []
@@ -517,10 +514,10 @@ with tab1:
                     period_pattern.extend([period] * (n_rows - len(period_pattern)))  # Extend if too short
 
                 # Assign periods to months
-                monthly_forecasts_df['Period'] = period_pattern
+                monthly_track_revenue_projections_df['Period'] = period_pattern
 
                 # Group data by period and aggregate
-                aggregated_df = monthly_forecasts_df.groupby('Period').agg({
+                aggregated_df = monthly_track_revenue_projections_df.groupby('Period').agg({
                     'track_name': 'first',
                     'month': 'first',  # First month in each period
                     'DISC': 'sum'      # Sum discounted values
@@ -610,7 +607,7 @@ with tab1:
             country_breakdown = []
             for index, row in listener_geography_df.iterrows():
                 country = row['Country']
-                forecast_no_disc_value = monthly_forecasts_df[country + ' Royalty Value'].sum() 
+                forecast_no_disc_value = monthly_track_revenue_projections_df[country + ' Royalty Value'].sum() 
                 country_breakdown.append({
                     'Country': country,
                     'forecast_no_disc': forecast_no_disc_value

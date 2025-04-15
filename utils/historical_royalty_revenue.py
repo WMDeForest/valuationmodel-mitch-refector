@@ -5,6 +5,9 @@ This module provides functions to calculate the historical royalty revenue from 
 applying appropriate royalty rates and adjustment factors.
 """
 
+# Define cutoff date for historical valuations
+HISTORICAL_VALUATION_CUTOFF = '2024-02'
+
 def calculate_historical_royalty_revenue(
     total_historical_track_streams,
     mechanical_royalty_rates_df,
