@@ -80,6 +80,9 @@ PYTHONPATH=/Users/mitchdeforest/Documents/valuationmodel-mitch-refector python3 
 
 # Process all artists with 8 workers:
 PYTHONPATH=/Users/mitchdeforest/Documents/valuationmodel-mitch-refector python3 backtest_pipeline/artist_mldr/artist_mldr_calculator.py --workers 8 --max-connections 25
+
+# Process a specific artist by Chartmetric ID (e.g., 3604555):
+PYTHONPATH=/Users/mitchdeforest/Documents/valuationmodel-mitch-refector python3 backtest_pipeline/artist_mldr/artist_mldr_calculator.py --artist-id 3604555
 """
 
 import os
@@ -358,11 +361,30 @@ def calculate_artist_mldr(artist_data: pd.DataFrame) -> float:
         MLDR value (float)
     """
     try:
+        # Log the date range we're analyzing
+        min_date = artist_data['Date'].min().strftime('%Y-%m-%d')
+        max_date = artist_data['Date'].max().strftime('%Y-%m-%d')
+        date_range_days = (artist_data['Date'].max() - artist_data['Date'].min()).days
+        num_data_points = len(artist_data)
+        
+        safe_log('INFO', f"Analyzing date range: {min_date} to {max_date} ({date_range_days} days, {num_data_points} data points)")
+        
+        # Log a few sample data points to verify data content
+        safe_log('INFO', f"Data sample (first 3 points): {artist_data.head(3)[['Date', 'Monthly Listeners']].to_dict('records')}")
+        safe_log('INFO', f"Data sample (last 3 points): {artist_data.tail(3)[['Date', 'Monthly Listeners']].to_dict('records')}")
+        
         # Run the analysis - this handles data cleaning, anomaly detection, and curve fitting
         results = analyze_listener_decay(artist_data)
         
         # Extract MLDR from results
         mldr = results['mldr']
+        
+        # Log MLDR and any other useful analysis information
+        safe_log('INFO', f"Calculated MLDR: {mldr}")
+        if 'used_date_range' in results:
+            safe_log('INFO', f"Actual dates used in calculation: {results['used_date_range']}")
+        if 'outliers_removed' in results and results['outliers_removed']:
+            safe_log('INFO', f"Outliers were removed: {results['outliers_removed']}")
         
         return mldr
     except Exception as e:
@@ -467,24 +489,31 @@ def parse_arguments():
                         help=f'Maximum database connections (default: {MAX_CONNECTIONS})')
     parser.add_argument('--artist-limit', type=int, default=None,
                         help='Limit the number of artists to process (for testing)')
+    parser.add_argument('--artist-id', type=int, default=None,
+                        help='Process a specific Chartmetric artist ID only')
     return parser.parse_args()
 
-def process_all_artists_parallel(num_workers: int = DEFAULT_WORKERS, artist_limit: Optional[int] = None):
+def process_all_artists_parallel(num_workers: int = DEFAULT_WORKERS, artist_limit: Optional[int] = None, specific_artist_id: Optional[int] = None):
     """
     Process all artists in parallel using a thread pool.
     
     Args:
         num_workers: Number of worker threads to use
         artist_limit: Optional limit on the number of artists to process (for testing)
+        specific_artist_id: Optional specific artist ID to process
     """
-    # Get list of all artists
-    artists = get_all_artists()
-    
-    # Apply limit if specified
-    if artist_limit is not None and artist_limit > 0:
-        safe_log('INFO', f"Limiting to {artist_limit} artists for testing")
-        artists = artists[:artist_limit]
+    # Get list of all artists or use specific artist
+    if specific_artist_id is not None:
+        artists = [specific_artist_id]
+        safe_log('INFO', f"Processing only artist ID: {specific_artist_id}")
+    else:
+        artists = get_all_artists()
         
+        # Apply limit if specified
+        if artist_limit is not None and artist_limit > 0:
+            safe_log('INFO', f"Limiting to {artist_limit} artists for testing")
+            artists = artists[:artist_limit]
+            
     total_artists = len(artists)
     
     safe_log('INFO', f"Processing {total_artists} artists using {num_workers} workers")
@@ -536,7 +565,7 @@ if __name__ == "__main__":
     
     try:
         # Process all artists in parallel
-        process_all_artists_parallel(args.workers, args.artist_limit)
+        process_all_artists_parallel(args.workers, args.artist_limit, args.artist_id)
     finally:
         # Ensure all connections are closed
         close_all_connections()
