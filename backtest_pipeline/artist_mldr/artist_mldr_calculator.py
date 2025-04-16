@@ -461,187 +461,215 @@ def get_all_artists():
     finally:
         release_db_connection(connection)
 
-def get_artist_data(artist_id: int) -> pd.DataFrame:
+def get_artists_data_batch(artist_ids):
     """
-    Get monthly listener data for a specific artist.
+    Get monthly listener data for a batch of artists at once.
     
     Args:
-        artist_id: The Chartmetric artist ID
+        artist_ids: List of Chartmetric artist IDs
         
     Returns:
-        DataFrame with Date and Monthly Listeners columns
+        Dict mapping artist_id to its DataFrame with Date and Monthly Listeners columns
     """
-    query = """
-    SELECT date, monthly_listeners
+    if not artist_ids:
+        return {}
+    
+    # Format the artist IDs for the IN clause
+    ids_str = ','.join(str(id) for id in artist_ids)
+    
+    query = f"""
+    SELECT cm_artist_id, date, monthly_listeners
     FROM backtest_artist_daily_training_data
-    WHERE cm_artist_id = %s
-    ORDER BY date
+    WHERE cm_artist_id IN ({ids_str})
+    ORDER BY cm_artist_id, date
     """
     
     engine = get_sqlalchemy_engine()
     try:
-        df = pd.read_sql(query, engine, params=(artist_id,))
+        # Get all data for the batch of artists in one query
+        df = pd.read_sql(query, engine)
         
         if len(df) == 0:
-            safe_log('WARNING', f"No data found for artist {artist_id}")
-            return None
+            safe_log('WARNING', f"No data found for any artists in batch")
+            return {}
+        
+        # Split the data by artist_id
+        result = {}
+        for artist_id in artist_ids:
+            artist_df = df[df['cm_artist_id'] == artist_id].copy()
             
-        # Rename columns to match what analyze_listener_decay expects
-        df.rename(columns={
-            'date': 'Date',
-            'monthly_listeners': 'Monthly Listeners'
-        }, inplace=True)
-        
-        # Ensure Date is datetime
-        df['Date'] = pd.to_datetime(df['Date'])
-        
-        safe_log('INFO', f"Retrieved {len(df)} data points for artist {artist_id}")
-        return df
+            if len(artist_df) == 0:
+                safe_log('WARNING', f"No data found for artist {artist_id}")
+                continue
+                
+            # Drop the artist_id column as it's no longer needed
+            artist_df = artist_df.drop('cm_artist_id', axis=1)
+            
+            # Rename columns to match what analyze_listener_decay expects
+            artist_df.rename(columns={
+                'date': 'Date',
+                'monthly_listeners': 'Monthly Listeners'
+            }, inplace=True)
+            
+            # Ensure Date is datetime
+            artist_df['Date'] = pd.to_datetime(artist_df['Date'])
+            
+            safe_log('INFO', f"Retrieved {len(artist_df)} data points for artist {artist_id}")
+            result[artist_id] = artist_df
+            
+        return result
     except Exception as e:
-        safe_log('ERROR', f"Error retrieving data for artist {artist_id}: {e}")
-        return None
+        safe_log('ERROR', f"Error retrieving data for artist batch: {e}")
+        return {}
 
-def calculate_artist_mldr(artist_data: pd.DataFrame) -> float:
+def store_mldr_batch(mldr_data):
     """
-    Calculate MLDR for an artist using the analyze_listener_decay function.
+    Store multiple calculated MLDRs in a batch.
     
     Args:
-        artist_data: DataFrame with Date and Monthly Listeners columns
-        
+        mldr_data: List of tuples (artist_id, mldr)
+    
     Returns:
-        MLDR value (float)
+        Dict mapping artist_id to success status
     """
-    try:
-        # Log the date range we're analyzing
-        min_date = artist_data['Date'].min().strftime('%Y-%m-%d')
-        max_date = artist_data['Date'].max().strftime('%Y-%m-%d')
-        date_range_days = (artist_data['Date'].max() - artist_data['Date'].min()).days
-        num_data_points = len(artist_data)
-        
-        safe_log('INFO', f"Raw date range: {min_date} to {max_date} ({date_range_days} days, {num_data_points} data points)")
-        
-        # Log a few sample data points to verify data content
-        safe_log('INFO', f"Data sample (first 3 points): {artist_data.head(3)[['Date', 'Monthly Listeners']].to_dict('records')}")
-        safe_log('INFO', f"Data sample (last 3 points): {artist_data.tail(3)[['Date', 'Monthly Listeners']].to_dict('records')}")
-        
-        # Run the analysis - this handles data cleaning, anomaly detection, and curve fitting
-        results = analyze_listener_decay(artist_data)
-        
-        # Extract MLDR from results
-        mldr = results['mldr']
-        
-        # Log MLDR and normalized date range information
-        safe_log('INFO', f"Calculated MLDR: {mldr}")
-        
-        # Log normalized date range if available
-        if 'normalized_start_date' in results and 'normalized_end_date' in results:
-            normalized_start = results['normalized_start_date'].strftime('%Y-%m-%d') if hasattr(results['normalized_start_date'], 'strftime') else results['normalized_start_date']
-            normalized_end = results['normalized_end_date'].strftime('%Y-%m-%d') if hasattr(results['normalized_end_date'], 'strftime') else results['normalized_end_date']
-            safe_log('INFO', f"Normalized date range used for MLDR calculation: {normalized_start} to {normalized_end}")
-        
-        if 'date_filtered_listener_data' in results:
-            filtered_min_date = results['date_filtered_listener_data']['Date'].min().strftime('%Y-%m-%d')
-            filtered_max_date = results['date_filtered_listener_data']['Date'].max().strftime('%Y-%m-%d')
-            safe_log('INFO', f"Filtered data date range: {filtered_min_date} to {filtered_max_date}")
-        
-        if 'used_date_range' in results:
-            safe_log('INFO', f"Actual dates used in calculation: {results['used_date_range']}")
-        if 'outliers_removed' in results and results['outliers_removed']:
-            safe_log('INFO', f"Outliers were removed: {results['outliers_removed']}")
-        
-        return mldr
-    except Exception as e:
-        safe_log('ERROR', f"Error calculating MLDR: {e}")
-        return None
-
-def store_artist_mldr(artist_id: int, mldr: float):
-    """
-    Store the calculated MLDR in the database.
+    if not mldr_data:
+        return {}
     
-    Args:
-        artist_id: The Chartmetric artist ID
-        mldr: The calculated MLDR value
-    """
-    # First check if a record already exists for this artist
+    # Query to check which artists already exist
     check_query = """
-    SELECT id FROM backtest_artist_mldr 
-    WHERE cm_artist_id = %s
+    SELECT cm_artist_id FROM backtest_artist_mldr
+    WHERE cm_artist_id = ANY(%s)
     """
     
-    # Insert or update query based on whether the record exists
+    # Query for batch insert of new records
     insert_query = """
     INSERT INTO backtest_artist_mldr 
     (cm_artist_id, mldr, created_at)
-    VALUES (%s, %s, NOW())
+    VALUES %s
     """
     
+    # Query for batch update of existing records
     update_query = """
     UPDATE backtest_artist_mldr
-    SET mldr = %s, created_at = NOW()
-    WHERE cm_artist_id = %s
+    SET mldr = data_table.mldr, created_at = NOW()
+    FROM (VALUES %s) AS data_table(cm_artist_id, mldr)
+    WHERE backtest_artist_mldr.cm_artist_id = data_table.cm_artist_id
     """
     
     connection = get_db_connection()
+    result = {artist_id: False for artist_id, _ in mldr_data}
+    
     try:
         with connection.cursor() as cursor:
-            # Check if record exists
-            cursor.execute(check_query, (artist_id,))
-            record = cursor.fetchone()
+            # Check which artists already exist in the database
+            artist_ids = [artist_id for artist_id, _ in mldr_data]
+            cursor.execute(check_query, (artist_ids,))
+            existing_artists = {row[0] for row in cursor.fetchall()}
             
-            if record:
-                # Update existing record
-                cursor.execute(update_query, (mldr, artist_id))
-                safe_log('INFO', f"Updated MLDR {mldr} for artist {artist_id}")
-            else:
-                # Insert new record
-                cursor.execute(insert_query, (artist_id, mldr))
-                safe_log('INFO', f"Inserted new MLDR {mldr} for artist {artist_id}")
+            # Separate new and existing artists
+            new_data = [(artist_id, mldr) for artist_id, mldr in mldr_data 
+                        if artist_id not in existing_artists]
+            update_data = [(artist_id, mldr) for artist_id, mldr in mldr_data 
+                          if artist_id in existing_artists]
+            
+            # Insert new records in batch
+            if new_data:
+                # Add timestamp to each record
+                insert_values = [(artist_id, mldr, 'NOW()') for artist_id, mldr in new_data]
+                execute_values(cursor, insert_query, insert_values)
+                safe_log('INFO', f"Inserted {len(new_data)} new MLDR records")
+                
+                # Mark as success
+                for artist_id, _ in new_data:
+                    result[artist_id] = True
+            
+            # Update existing records in batch
+            if update_data:
+                execute_values(cursor, update_query, update_data)
+                safe_log('INFO', f"Updated {len(update_data)} existing MLDR records")
+                
+                # Mark as success
+                for artist_id, _ in update_data:
+                    result[artist_id] = True
                 
         connection.commit()
-        return True
+        return result
     except Exception as e:
         connection.rollback()
-        safe_log('ERROR', f"Error storing MLDR for artist {artist_id}: {e}")
-        return False
+        safe_log('ERROR', f"Error in batch MLDR storage: {e}")
+        return result
     finally:
         release_db_connection(connection)
 
-def process_artist(artist_id: int) -> Dict:
+def process_artist_batch(artist_ids):
     """
-    Process a single artist - gets data, calculates MLDR, and stores it.
-    This function is designed to be used with parallel processing.
+    Process a batch of artists - gets data, calculates MLDR, and stores results in batch.
     
     Args:
-        artist_id: The Chartmetric artist ID
+        artist_ids: List of Chartmetric artist IDs
         
     Returns:
-        Dict with processing results
+        Dict mapping artist_id to result dict
     """
-    result = {
-        'artist_id': artist_id,
-        'success': False,
-        'reason': None
-    }
+    results = {artist_id: {'artist_id': artist_id, 'success': False, 'reason': None} 
+              for artist_id in artist_ids}
     
-    # Get artist data
-    artist_data = get_artist_data(artist_id)
-    if artist_data is None or len(artist_data) < 3:  # Need at least 3 data points for fitting
-        result['reason'] = "Insufficient data"
-        return result
-        
-    # Calculate MLDR
-    mldr = calculate_artist_mldr(artist_data)
-    if mldr is None:
-        result['reason'] = "Failed to calculate MLDR"
-        return result
-        
-    # Store MLDR in database
-    if store_artist_mldr(artist_id, mldr):
-        result['success'] = True
-    else:
-        result['reason'] = "Failed to store MLDR"
+    # Get data for all artists in the batch at once
+    batch_data = get_artists_data_batch(artist_ids)
     
-    return result
+    # Process each artist's data and collect MLDRs
+    mldr_data = []
+    for artist_id in artist_ids:
+        # Skip if no data was found
+        if artist_id not in batch_data:
+            results[artist_id]['reason'] = "No data found"
+            continue
+            
+        artist_data = batch_data[artist_id]
+        
+        # Check if we have enough data points
+        if len(artist_data) < 3:
+            results[artist_id]['reason'] = "Insufficient data"
+            continue
+            
+        # Calculate MLDR
+        try:
+            # Run the analysis and capture important details for logging
+            min_date = artist_data['Date'].min().strftime('%Y-%m-%d')
+            max_date = artist_data['Date'].max().strftime('%Y-%m-%d')
+            date_range_days = (artist_data['Date'].max() - artist_data['Date'].min()).days
+            num_data_points = len(artist_data)
+            
+            safe_log('INFO', f"Raw date range for artist {artist_id}: {min_date} to {max_date} ({date_range_days} days, {num_data_points} data points)")
+            
+            # Calculate MLDR
+            mldr_result = analyze_listener_decay(artist_data)
+            mldr = mldr_result['mldr']
+            
+            # Log results
+            normalized_start = mldr_result['normalized_start_date'].strftime('%Y-%m-%d') if 'normalized_start_date' in mldr_result else "Unknown"
+            normalized_end = mldr_result['normalized_end_date'].strftime('%Y-%m-%d') if 'normalized_end_date' in mldr_result else "Unknown"
+            safe_log('INFO', f"Calculated MLDR for artist {artist_id}: {mldr} (normalized range: {normalized_start} to {normalized_end})")
+            
+            # Add to batch for storage
+            mldr_data.append((artist_id, mldr))
+        except Exception as e:
+            safe_log('ERROR', f"Error calculating MLDR for artist {artist_id}: {e}")
+            results[artist_id]['reason'] = "Error in calculation"
+            continue
+    
+    # Store all MLDRs in a batch
+    if mldr_data:
+        batch_results = store_mldr_batch(mldr_data)
+        
+        # Update results based on storage success
+        for artist_id, success in batch_results.items():
+            if success:
+                results[artist_id]['success'] = True
+            else:
+                results[artist_id]['reason'] = "Failed to store MLDR"
+    
+    return results
 
 def process_all_artists_parallel(num_workers: int = DEFAULT_WORKERS, artist_limit: Optional[int] = None, specific_artist_id: Optional[int] = None):
     """
@@ -672,36 +700,36 @@ def process_all_artists_parallel(num_workers: int = DEFAULT_WORKERS, artist_limi
     successful = 0
     failed = 0
     
-    # Use simpler approach - process artists sequentially in smaller batches
-    # This avoids SSH tunnel issues in a multithreaded environment
-    batch_size = num_workers
-    for i in range(0, total_artists, batch_size):
+    # Define batch size for processing
+    # Use smaller batches for fewer artists to ensure parallelism
+    artist_batch_size = min(5, max(1, total_artists // (num_workers * 2)))
+    
+    # Process artists in batches
+    for i in range(0, total_artists, artist_batch_size):
         # Get next batch of artists
-        batch = artists[i:i+batch_size]
-        batch_futures = []
+        batch = artists[i:i+artist_batch_size]
         
-        # Create thread pool for this batch only
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-            # Submit all tasks in this batch
-            for artist_id in batch:
-                future = executor.submit(process_artist, artist_id)
-                batch_futures.append((future, artist_id))
-                
-            # Wait for all tasks in this batch to complete
-            for future, artist_id in batch_futures:
-                try:
-                    result = future.result()
-                    if result['success']:
-                        successful += 1
-                    else:
-                        failed += 1
-                        safe_log('WARNING', f"Failed to process artist {artist_id}: {result['reason']}")
-                except Exception as e:
+        # Process sub-batches in parallel
+        sub_batches = []
+        for j in range(0, len(batch), num_workers):
+            sub_batch = batch[j:j+num_workers]
+            if sub_batch:
+                sub_batches.append(sub_batch)
+        
+        # Process each sub-batch in parallel
+        for sub_batch in sub_batches:
+            batch_results = process_artist_batch(sub_batch)
+            
+            # Update counters
+            for artist_id, result in batch_results.items():
+                if result['success']:
+                    successful += 1
+                else:
                     failed += 1
-                    safe_log('ERROR', f"Exception processing artist {artist_id}: {e}")
-                
+                    safe_log('WARNING', f"Failed to process artist {artist_id}: {result['reason']}")
+            
         # Log progress after each batch
-        completed = min(i + batch_size, total_artists)
+        completed = min(i + artist_batch_size, total_artists)
         safe_log('INFO', f"Progress: {completed}/{total_artists} artists processed ({successful} successful, {failed} failed)")
             
     # Log summary
@@ -731,11 +759,11 @@ if __name__ == "__main__":
             setup_ssh_tunnel()
             
             # Process the artist
-            result = process_artist(args.artist_id)
-            if result['success']:
+            result = process_artist_batch([args.artist_id])
+            if result[args.artist_id]['success']:
                 safe_log('INFO', f"Successfully processed artist {args.artist_id}")
             else:
-                safe_log('WARNING', f"Failed to process artist {args.artist_id}: {result['reason']}")
+                safe_log('WARNING', f"Failed to process artist {args.artist_id}: {result[args.artist_id]['reason']}")
         except Exception as e:
             safe_log('ERROR', f"Error processing artist {args.artist_id}: {e}")
         finally:
