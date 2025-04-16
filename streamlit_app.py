@@ -267,7 +267,7 @@ with tab1:
             earliest_track_date_formatted = earliest_track_datetime.strftime('%Y-%m')
 
             # Extract the latest (most recent) cumulative stream count
-            total_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
+            total_historical_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
 
             # Calculate period-specific stream counts using our utility function
             # These represent streams in the last 30/90/365 days
@@ -302,7 +302,7 @@ with tab1:
                 'track_streams_last_30days': [track_streams_last_30days],
                 'track_streams_last_90days': [track_streams_last_90days],
                 'track_streams_last_365days': [track_streams_last_365days],
-                'total_track_streams': [total_track_streams],
+                'total_historical_track_streams': [total_historical_track_streams],
                 'months_since_release_total': [months_since_release_total],
                 'avg_monthly_streams_months_4to12': [avg_monthly_streams_months_4to12],
                 'avg_monthly_streams_months_2to3': [avg_monthly_streams_months_2to3],
@@ -351,7 +351,7 @@ with tab1:
                 track_streams_last_365days = song_data['track_streams_last_365days']
                 track_streams_last_90days = song_data['track_streams_last_90days']
                 track_streams_last_30days = song_data['track_streams_last_30days']
-                total_historical_track_streams = song_data['total_track_streams']
+                total_historical_track_streams = song_data['total_historical_track_streams']
                 
                 # Get both date formats - we need raw format for months calculation
                 earliest_track_date = song_data['earliest_track_date']  # Original DD/MM/YYYY format
@@ -402,10 +402,6 @@ with tab1:
                     track_decay_rate_df, 
                     track_decay_k=track_decay_k  # Track-specific fitted decay parameter
                 )
-                
-                # Store track adjustment metrics for reporting and quality analysis
-                track_adjustment_weight = track_adjustment_info['first_adjustment_weight']
-                track_average_percent_change = track_adjustment_info['first_average_percent_change']
                 
                 # ===== 6. SEGMENT DECAY RATES BY TIME PERIOD =====
                 # Calculate average decay rates for each segment
