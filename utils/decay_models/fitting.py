@@ -10,6 +10,7 @@ from scipy.optimize import curve_fit
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
 from utils.data_processing import remove_anomalies
 from utils.data_processing import sample_data
+import pandas as pd
 
 def fit_segment(months_since_release, streams):
     """
@@ -150,6 +151,8 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
                    - 'is_anomaly': Flags for identified anomalies
         min_date: Minimum date in dataset (useful for UI date ranges)
         max_date: Maximum date in dataset (useful for UI date ranges)
+        normalized_start_date: Start date normalized to first day of the month
+        normalized_end_date: End date normalized to last day of the month
     
     Example:
     --------
@@ -187,12 +190,26 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     min_date = monthly_data['Date'].min().to_pydatetime()
     max_date = monthly_data['Date'].max().to_pydatetime()
     
-    # Filter by date if specified
-    if start_date and end_date:
-        mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
-        date_filtered_listener_data = monthly_data[mask]
+    # Normalize start and end dates to month boundaries to ensure consistency
+    if start_date:
+        # Normalize to first day of the month
+        normalized_start_date = pd.Timestamp(year=start_date.year, month=start_date.month, day=1)
     else:
-        date_filtered_listener_data = monthly_data
+        normalized_start_date = pd.Timestamp(year=min_date.year, month=min_date.month, day=1)
+        
+    if end_date:
+        # Normalize to last day of the month
+        next_month = end_date.month + 1 if end_date.month < 12 else 1
+        next_month_year = end_date.year if end_date.month < 12 else end_date.year + 1
+        normalized_end_date = pd.Timestamp(year=next_month_year, month=next_month, day=1) - pd.Timedelta(days=1)
+    else:
+        next_month = max_date.month + 1 if max_date.month < 12 else 1
+        next_month_year = max_date.year if max_date.month < 12 else max_date.year + 1
+        normalized_end_date = pd.Timestamp(year=next_month_year, month=next_month, day=1) - pd.Timedelta(days=1)
+    
+    # Filter by normalized dates
+    mask = (monthly_data['Date'] >= normalized_start_date) & (monthly_data['Date'] <= normalized_end_date)
+    date_filtered_listener_data = monthly_data[mask]
     
     # Calculate months since first date
     date_filtered_listener_data['Months'] = date_filtered_listener_data['Date'].apply(
@@ -207,7 +224,9 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
         'fitted_decay_parameters': fitted_decay_parameters,
         'date_filtered_listener_data': date_filtered_listener_data,
         'min_date': min_date,
-        'max_date': max_date
+        'max_date': max_date,
+        'normalized_start_date': normalized_start_date,
+        'normalized_end_date': normalized_end_date
     }
 
 # For backward compatibility
