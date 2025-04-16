@@ -367,7 +367,7 @@ def calculate_artist_mldr(artist_data: pd.DataFrame) -> float:
         date_range_days = (artist_data['Date'].max() - artist_data['Date'].min()).days
         num_data_points = len(artist_data)
         
-        safe_log('INFO', f"Analyzing date range: {min_date} to {max_date} ({date_range_days} days, {num_data_points} data points)")
+        safe_log('INFO', f"Raw date range: {min_date} to {max_date} ({date_range_days} days, {num_data_points} data points)")
         
         # Log a few sample data points to verify data content
         safe_log('INFO', f"Data sample (first 3 points): {artist_data.head(3)[['Date', 'Monthly Listeners']].to_dict('records')}")
@@ -379,8 +379,20 @@ def calculate_artist_mldr(artist_data: pd.DataFrame) -> float:
         # Extract MLDR from results
         mldr = results['mldr']
         
-        # Log MLDR and any other useful analysis information
+        # Log MLDR and normalized date range information
         safe_log('INFO', f"Calculated MLDR: {mldr}")
+        
+        # Log normalized date range if available
+        if 'normalized_start_date' in results and 'normalized_end_date' in results:
+            normalized_start = results['normalized_start_date'].strftime('%Y-%m-%d') if hasattr(results['normalized_start_date'], 'strftime') else results['normalized_start_date']
+            normalized_end = results['normalized_end_date'].strftime('%Y-%m-%d') if hasattr(results['normalized_end_date'], 'strftime') else results['normalized_end_date']
+            safe_log('INFO', f"Normalized date range used for MLDR calculation: {normalized_start} to {normalized_end}")
+        
+        if 'date_filtered_listener_data' in results:
+            filtered_min_date = results['date_filtered_listener_data']['Date'].min().strftime('%Y-%m-%d')
+            filtered_max_date = results['date_filtered_listener_data']['Date'].max().strftime('%Y-%m-%d')
+            safe_log('INFO', f"Filtered data date range: {filtered_min_date} to {filtered_max_date}")
+        
         if 'used_date_range' in results:
             safe_log('INFO', f"Actual dates used in calculation: {results['used_date_range']}")
         if 'outliers_removed' in results and results['outliers_removed']:
