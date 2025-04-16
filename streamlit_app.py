@@ -192,7 +192,7 @@ with tab1:
                 # ===== CORE ANALYSIS SECTION =====
                 # 7. RUN DECAY RATE ANALYSIS WITH SELECTED DATE RANGE
                 filtered_decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
-                filtered_listener_data = filtered_decay_analysis['subset_df']
+                date_filtered_listener_data = filtered_decay_analysis['date_filtered_listener_data']
                 mldr = filtered_decay_analysis['mldr']
                 fitted_decay_parameters = filtered_decay_analysis['fitted_decay_parameters']
                 
@@ -203,9 +203,9 @@ with tab1:
                 # 9. VISUALIZATION
                 fig, ax = plt.subplots(figsize=(10, 4))
                 # Plot the moving average
-                ax.plot(filtered_listener_data['Date'], filtered_listener_data['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
+                ax.plot(date_filtered_listener_data['Date'], date_filtered_listener_data['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
                 # Plot the fitted decay curve using pre-calculated parameters
-                ax.plot(filtered_listener_data['Date'], exponential_decay(filtered_listener_data['Months'], *fitted_decay_parameters), 
+                ax.plot(date_filtered_listener_data['Date'], exponential_decay(date_filtered_listener_data['Months'], *fitted_decay_parameters), 
                        label='Fitted Decay Curve', color='red', linestyle='--')
                 
                 # Plot formatting and styling

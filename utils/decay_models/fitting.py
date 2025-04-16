@@ -144,7 +144,7 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
         mldr: Monthly Listener Decay Rate (decimal value, e.g. 0.05 = 5% monthly decline)
         fitted_decay_parameters: Fitted parameters [S0, k] for the exponential decay model
               (S0 is initial listener count, k is decay rate)
-        subset_df: Processed DataFrame with calculated columns:
+        date_filtered_listener_data: Processed DataFrame with calculated columns:
                    - '4_Week_MA': Moving average (smoothed listener counts)
                    - 'Months': Months since first date
                    - 'is_anomaly': Flags for identified anomalies
@@ -164,7 +164,7 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     print(f"Monthly decay rate: {decay_rate:.2%}")  # e.g. "5.25%"
     
     # Visualize the data with matplotlib:
-    plt.plot(results['subset_df']['Date'], results['subset_df']['4_Week_MA'])
+    plt.plot(results['date_filtered_listener_data']['Date'], results['date_filtered_listener_data']['4_Week_MA'])
     ```
     
     Notes:
@@ -190,22 +190,22 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     # Filter by date if specified
     if start_date and end_date:
         mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
-        subset_df = monthly_data[mask]
+        date_filtered_listener_data = monthly_data[mask]
     else:
-        subset_df = monthly_data
+        date_filtered_listener_data = monthly_data
     
     # Calculate months since first date
-    subset_df['Months'] = subset_df['Date'].apply(
+    date_filtered_listener_data['Months'] = date_filtered_listener_data['Date'].apply(
         lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
     )
     
     # Calculate decay rate
-    mldr, fitted_decay_parameters = fit_decay_curve(subset_df)
+    mldr, fitted_decay_parameters = fit_decay_curve(date_filtered_listener_data)
     
     return {
         'mldr': mldr, 
         'fitted_decay_parameters': fitted_decay_parameters,
-        'subset_df': subset_df,
+        'date_filtered_listener_data': date_filtered_listener_data,
         'min_date': min_date,
         'max_date': max_date
     }
