@@ -100,6 +100,8 @@ import atexit
 import concurrent.futures
 import multiprocessing
 import argparse
+import time
+import threading
 
 # Import the MLDR calculation function from our existing codebase
 from utils.decay_models import analyze_listener_decay
@@ -129,14 +131,16 @@ DB_PARAMS = {
 }
 
 # Default parallelism and connection pool settings
-DEFAULT_WORKERS = max(1, multiprocessing.cpu_count() - 1)  # Default to CPU count - 1
+# Use a more conservative worker count to avoid overloading the SSH tunnel
+DEFAULT_WORKERS = min(4, max(1, multiprocessing.cpu_count() // 2))  # Lower worker count
 MIN_CONNECTIONS = 2
-MAX_CONNECTIONS = 20  # Increased for parallel processing
+MAX_CONNECTIONS = 10  # Reduced max connections to avoid overwhelming the tunnel
 
 # Global SSH tunnel and connection pools
 ssh_tunnel = None
 db_connection_pool = None
 sqlalchemy_engine = None
+ssh_tunnel_lock = threading.Lock()  # Add a lock for thread-safe tunnel access
 
 # Process-safe logging
 def safe_log(level, message):
@@ -153,25 +157,69 @@ def safe_log(level, message):
 def setup_ssh_tunnel():
     """Set up SSH tunnel for database connections."""
     global ssh_tunnel
-    if ssh_tunnel is None or not ssh_tunnel.is_active:
-        try:
-            # Create SSH tunnel
-            tunnel = sshtunnel.SSHTunnelForwarder(
-                (SSH_PARAMS['ssh_host']),
-                ssh_username=SSH_PARAMS['ssh_username'],
-                ssh_password=SSH_PARAMS['ssh_password'],
-                remote_bind_address=SSH_PARAMS['remote_bind_address'],
-                local_bind_address=('localhost', 0)  # Use random local port
-            )
-            tunnel.start()
-            ssh_tunnel = tunnel
-            safe_log('INFO', f"SSH tunnel established on local port {tunnel.local_bind_port}")
-            return tunnel
-        except Exception as e:
-            safe_log('ERROR', f"Error setting up SSH tunnel: {e}")
-            if 'tunnel' in locals() and tunnel.is_active:
-                tunnel.close()
-            raise
+    
+    # Use a lock to prevent multiple threads from creating tunnels simultaneously
+    with ssh_tunnel_lock:
+        if ssh_tunnel is None or not ssh_tunnel.is_active:
+            try:
+                # Close any existing tunnel
+                if ssh_tunnel is not None:
+                    try:
+                        ssh_tunnel.close()
+                    except:
+                        pass
+                
+                safe_log('INFO', "Setting up new SSH tunnel...")
+                
+                # Create SSH tunnel with conservative connection settings
+                tunnel = sshtunnel.SSHTunnelForwarder(
+                    (SSH_PARAMS['ssh_host']),
+                    ssh_username=SSH_PARAMS['ssh_username'],
+                    ssh_password=SSH_PARAMS['ssh_password'],
+                    remote_bind_address=SSH_PARAMS['remote_bind_address'],
+                    local_bind_address=('localhost', 0),  # Use random local port
+                    set_keepalive=5,                     # Keep tunnel alive with packets every 5 seconds
+                    compression=True,                    # Enable compression for better performance
+                    allow_agent=False                    # Don't use SSH agent
+                )
+                
+                # Start the tunnel
+                tunnel.start()
+                
+                # Wait a moment to ensure it's fully established
+                time.sleep(1)
+                
+                if not tunnel.is_active:
+                    raise Exception("Failed to establish SSH tunnel")
+                
+                ssh_tunnel = tunnel
+                safe_log('INFO', f"SSH tunnel established on local port {tunnel.local_bind_port}")
+                
+                # Add a heartbeat thread to keep the tunnel alive
+                def heartbeat():
+                    while ssh_tunnel and ssh_tunnel.is_active:
+                        try:
+                            # Send a keep-alive packet
+                            if hasattr(ssh_tunnel.ssh_transport, 'send_ignore'):
+                                ssh_tunnel.ssh_transport.send_ignore()
+                            time.sleep(10)  # Send heartbeat every 10 seconds
+                        except:
+                            # If there's an error, break out of the loop
+                            break
+                
+                heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+                heartbeat_thread.start()
+                
+                return tunnel
+            except Exception as e:
+                safe_log('ERROR', f"Error setting up SSH tunnel: {e}")
+                if 'tunnel' in locals() and tunnel.is_active:
+                    try:
+                        tunnel.close()
+                    except:
+                        pass
+                raise
+    
     return ssh_tunnel
 
 def initialize_connection_pool():
@@ -180,27 +228,49 @@ def initialize_connection_pool():
     
     if db_connection_pool is not None:
         return db_connection_pool
-        
-    # Make sure we have an SSH tunnel
-    tunnel = setup_ssh_tunnel()
     
-    try:
-        # Create connection parameters with tunnel's local port
-        conn_params = DB_PARAMS.copy()
-        conn_params['port'] = tunnel.local_bind_port
-        
-        # Create connection pool
-        connection_pool = pool.ThreadedConnectionPool(
-            minconn=MIN_CONNECTIONS,
-            maxconn=MAX_CONNECTIONS,
-            **conn_params
-        )
-        db_connection_pool = connection_pool
-        safe_log('INFO', f"Database connection pool initialized with {MIN_CONNECTIONS}-{MAX_CONNECTIONS} connections")
-        return connection_pool
-    except Exception as e:
-        safe_log('ERROR', f"Error initializing connection pool: {e}")
-        raise
+    # Ensure we have a working SSH tunnel
+    retry_count = 0
+    while retry_count < 3:
+        try:
+            # Make sure we have an SSH tunnel
+            tunnel = setup_ssh_tunnel()
+            
+            # Create connection parameters with tunnel's local port
+            conn_params = DB_PARAMS.copy()
+            conn_params['port'] = tunnel.local_bind_port
+            
+            # Create connection pool
+            connection_pool = pool.ThreadedConnectionPool(
+                minconn=MIN_CONNECTIONS,
+                maxconn=MAX_CONNECTIONS,
+                **conn_params
+            )
+            
+            # Test a connection to make sure it works
+            test_conn = connection_pool.getconn()
+            connection_pool.putconn(test_conn)
+            
+            db_connection_pool = connection_pool
+            safe_log('INFO', f"Database connection pool initialized with {MIN_CONNECTIONS}-{MAX_CONNECTIONS} connections")
+            return connection_pool
+        except Exception as e:
+            retry_count += 1
+            safe_log('ERROR', f"Error initializing connection pool (attempt {retry_count}/3): {e}")
+            
+            # If we have a tunnel issue, reset it and retry
+            if ssh_tunnel is not None:
+                try:
+                    ssh_tunnel.close()
+                except:
+                    pass
+                ssh_tunnel = None
+                
+            # Wait before retrying
+            time.sleep(2)
+    
+    # If we exhaust all retries, raise the error
+    raise Exception("Failed to initialize connection pool after multiple attempts")
 
 def initialize_sqlalchemy_engine():
     """Initialize SQLAlchemy engine with connection pooling."""
@@ -208,30 +278,51 @@ def initialize_sqlalchemy_engine():
     
     if sqlalchemy_engine is not None:
         return sqlalchemy_engine
-        
-    # Make sure we have an SSH tunnel
-    tunnel = setup_ssh_tunnel()
     
-    try:
-        # Create connection string using tunnel's local port
-        conn_string = f"postgresql://{DB_PARAMS['user']}:{DB_PARAMS['password']}@localhost:{tunnel.local_bind_port}/{DB_PARAMS['dbname']}"
-        
-        # Create engine with connection pooling
-        engine = create_engine(
-            conn_string,
-            poolclass=sa_pool.QueuePool,
-            pool_size=MAX_CONNECTIONS,
-            max_overflow=5,  # Increased for parallel processing
-            pool_timeout=30,
-            pool_recycle=1800  # Recycle connections after 30 minutes
-        )
-        
-        sqlalchemy_engine = engine
-        safe_log('INFO', "SQLAlchemy engine initialized with connection pooling")
-        return engine
-    except Exception as e:
-        safe_log('ERROR', f"Error creating SQLAlchemy engine: {e}")
-        raise
+    # Ensure we have a working SSH tunnel
+    retry_count = 0
+    while retry_count < 3:
+        try:
+            # Make sure we have an SSH tunnel
+            tunnel = setup_ssh_tunnel()
+            
+            # Create connection string using tunnel's local port
+            conn_string = f"postgresql://{DB_PARAMS['user']}:{DB_PARAMS['password']}@localhost:{tunnel.local_bind_port}/{DB_PARAMS['dbname']}"
+            
+            # Create engine with connection pooling
+            engine = create_engine(
+                conn_string,
+                poolclass=sa_pool.QueuePool,
+                pool_size=MAX_CONNECTIONS,
+                max_overflow=2,
+                pool_timeout=30,
+                pool_recycle=1800  # Recycle connections after 30 minutes
+            )
+            
+            # Test the connection without using execute
+            with engine.connect() as conn:
+                pass  # Just open and close the connection to test it
+            
+            sqlalchemy_engine = engine
+            safe_log('INFO', "SQLAlchemy engine initialized with connection pooling")
+            return engine
+        except Exception as e:
+            retry_count += 1
+            safe_log('ERROR', f"Error creating SQLAlchemy engine (attempt {retry_count}/3): {e}")
+            
+            # If we have a tunnel issue, reset it and retry
+            if ssh_tunnel is not None:
+                try:
+                    ssh_tunnel.close()
+                except:
+                    pass
+                ssh_tunnel = None
+                
+            # Wait before retrying
+            time.sleep(2)
+    
+    # If we exhaust all retries, raise the error
+    raise Exception("Failed to initialize SQLAlchemy engine after multiple attempts")
 
 def get_db_connection():
     """Get a connection from the connection pool."""
@@ -240,21 +331,58 @@ def get_db_connection():
     # Initialize pool if not already done
     if db_connection_pool is None:
         initialize_connection_pool()
-        
-    try:
-        # Get connection from pool
-        connection = db_connection_pool.getconn()
-        return connection
-    except Exception as e:
-        safe_log('ERROR', f"Error getting connection from pool: {e}")
-        raise
+    
+    # Retry logic for getting a connection
+    retry_count = 0
+    while retry_count < 3:
+        try:
+            # Get connection from pool
+            connection = db_connection_pool.getconn()
+            
+            # Test the connection with a simple query
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                
+            return connection
+        except Exception as e:
+            retry_count += 1
+            safe_log('ERROR', f"Error getting connection from pool (attempt {retry_count}/3): {e}")
+            
+            # If the connection failed, reinitialize everything
+            if retry_count >= 2:
+                safe_log('WARNING', "Attempting to rebuild connection pool...")
+                try:
+                    if db_connection_pool is not None:
+                        db_connection_pool.closeall()
+                except:
+                    pass
+                    
+                db_connection_pool = None
+                
+                # Reset SSH tunnel
+                if ssh_tunnel is not None:
+                    try:
+                        ssh_tunnel.close()
+                    except:
+                        pass
+                ssh_tunnel = None
+                
+                # Reinitialize
+                initialize_connection_pool()
+            
+            time.sleep(1)  # Wait before retrying
+    
+    raise Exception("Failed to get a database connection after multiple attempts")
 
 def release_db_connection(connection):
     """Release a connection back to the pool."""
     global db_connection_pool
     
     if db_connection_pool is not None and connection is not None:
-        db_connection_pool.putconn(connection)
+        try:
+            db_connection_pool.putconn(connection)
+        except Exception as e:
+            safe_log('ERROR', f"Error returning connection to pool: {e}")
 
 def get_sqlalchemy_engine():
     """Get the SQLAlchemy engine with connection pooling."""
@@ -263,7 +391,8 @@ def get_sqlalchemy_engine():
     # Initialize engine if not already done
     if sqlalchemy_engine is None:
         initialize_sqlalchemy_engine()
-        
+    
+    # Return the engine - no test query needed
     return sqlalchemy_engine
 
 def close_all_connections():
@@ -274,21 +403,43 @@ def close_all_connections():
     
     # Close psycopg2 connection pool
     if db_connection_pool is not None:
-        db_connection_pool.closeall()
+        try:
+            db_connection_pool.closeall()
+        except Exception as e:
+            safe_log('ERROR', f"Error closing connection pool: {e}")
         db_connection_pool = None
     
     # Close SQLAlchemy engine
     if sqlalchemy_engine is not None:
-        sqlalchemy_engine.dispose()
+        try:
+            sqlalchemy_engine.dispose()
+        except Exception as e:
+            safe_log('ERROR', f"Error disposing SQLAlchemy engine: {e}")
         sqlalchemy_engine = None
     
     # Close SSH tunnel
     if ssh_tunnel is not None and ssh_tunnel.is_active:
-        ssh_tunnel.close()
+        try:
+            ssh_tunnel.close()
+        except Exception as e:
+            safe_log('ERROR', f"Error closing SSH tunnel: {e}")
         ssh_tunnel = None
 
 # Register cleanup function to be called when the script exits
 atexit.register(close_all_connections)
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Calculate MLDR for artists in parallel')
+    parser.add_argument('--workers', type=int, default=DEFAULT_WORKERS,
+                        help=f'Number of worker processes (default: {DEFAULT_WORKERS})')
+    parser.add_argument('--max-connections', type=int, default=MAX_CONNECTIONS,
+                        help=f'Maximum database connections (default: {MAX_CONNECTIONS})')
+    parser.add_argument('--artist-limit', type=int, default=None,
+                        help='Limit the number of artists to process (for testing)')
+    parser.add_argument('--artist-id', type=int, default=None,
+                        help='Process a specific Chartmetric artist ID only')
+    return parser.parse_args()
 
 def get_all_artists():
     """Get a list of all unique artist IDs from the training data table."""
@@ -492,19 +643,6 @@ def process_artist(artist_id: int) -> Dict:
     
     return result
 
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Calculate MLDR for artists in parallel')
-    parser.add_argument('--workers', type=int, default=DEFAULT_WORKERS,
-                        help=f'Number of worker processes (default: {DEFAULT_WORKERS})')
-    parser.add_argument('--max-connections', type=int, default=MAX_CONNECTIONS,
-                        help=f'Maximum database connections (default: {MAX_CONNECTIONS})')
-    parser.add_argument('--artist-limit', type=int, default=None,
-                        help='Limit the number of artists to process (for testing)')
-    parser.add_argument('--artist-id', type=int, default=None,
-                        help='Process a specific Chartmetric artist ID only')
-    return parser.parse_args()
-
 def process_all_artists_parallel(num_workers: int = DEFAULT_WORKERS, artist_limit: Optional[int] = None, specific_artist_id: Optional[int] = None):
     """
     Process all artists in parallel using a thread pool.
@@ -534,30 +672,38 @@ def process_all_artists_parallel(num_workers: int = DEFAULT_WORKERS, artist_limi
     successful = 0
     failed = 0
     
-    # Create thread pool and process artists in parallel
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        # Submit all tasks
-        future_to_artist = {executor.submit(process_artist, artist_id): artist_id for artist_id in artists}
+    # Use simpler approach - process artists sequentially in smaller batches
+    # This avoids SSH tunnel issues in a multithreaded environment
+    batch_size = num_workers
+    for i in range(0, total_artists, batch_size):
+        # Get next batch of artists
+        batch = artists[i:i+batch_size]
+        batch_futures = []
         
-        # Process results as they complete
-        for i, future in enumerate(concurrent.futures.as_completed(future_to_artist)):
-            artist_id = future_to_artist[future]
-            try:
-                result = future.result()
-                if result['success']:
-                    successful += 1
-                else:
-                    failed += 1
-                    safe_log('WARNING', f"Failed to process artist {artist_id}: {result['reason']}")
+        # Create thread pool for this batch only
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Submit all tasks in this batch
+            for artist_id in batch:
+                future = executor.submit(process_artist, artist_id)
+                batch_futures.append((future, artist_id))
                 
-                # Log progress
-                if (i+1) % 10 == 0 or (i+1) == total_artists:
-                    safe_log('INFO', f"Progress: {i+1}/{total_artists} artists processed ({successful} successful, {failed} failed)")
-                    
-            except Exception as e:
-                failed += 1
-                safe_log('ERROR', f"Exception processing artist {artist_id}: {e}")
-    
+            # Wait for all tasks in this batch to complete
+            for future, artist_id in batch_futures:
+                try:
+                    result = future.result()
+                    if result['success']:
+                        successful += 1
+                    else:
+                        failed += 1
+                        safe_log('WARNING', f"Failed to process artist {artist_id}: {result['reason']}")
+                except Exception as e:
+                    failed += 1
+                    safe_log('ERROR', f"Exception processing artist {artist_id}: {e}")
+                
+        # Log progress after each batch
+        completed = min(i + batch_size, total_artists)
+        safe_log('INFO', f"Progress: {completed}/{total_artists} artists processed ({successful} successful, {failed} failed)")
+            
     # Log summary
     safe_log('INFO', f"Processing complete: {successful} successful, {failed} failed, {total_artists} total")
 
@@ -565,21 +711,46 @@ if __name__ == "__main__":
     # Parse command line arguments
     args = parse_arguments()
     
+    # Use a conservative worker count to avoid overwhelming the SSH tunnel
+    worker_count = min(args.workers, 4)  # Cap at 4 workers
+    if worker_count != args.workers and args.workers != DEFAULT_WORKERS:
+        safe_log('WARNING', f"Reducing worker count from {args.workers} to {worker_count} to prevent SSH tunnel overload")
+    
     # Update connection pool size if needed
     if args.max_connections > MAX_CONNECTIONS:
         MAX_CONNECTIONS = args.max_connections
     
-    safe_log('INFO', f"Starting Artist MLDR calculation with {args.workers} workers and {MAX_CONNECTIONS} max connections")
+    safe_log('INFO', f"Starting Artist MLDR calculation with {worker_count} workers and {MAX_CONNECTIONS} max connections")
     
-    # Initialize connection pools at the beginning
-    initialize_connection_pool()
-    initialize_sqlalchemy_engine()
+    # Process one artist at a time for the most reliable operation
+    if args.artist_id is not None:
+        # For a single artist, don't use parallelism
+        safe_log('INFO', f"Processing single artist (ID: {args.artist_id}) without parallelism")
+        try:
+            # Initialize SSH tunnel and connection once
+            setup_ssh_tunnel()
+            
+            # Process the artist
+            result = process_artist(args.artist_id)
+            if result['success']:
+                safe_log('INFO', f"Successfully processed artist {args.artist_id}")
+            else:
+                safe_log('WARNING', f"Failed to process artist {args.artist_id}: {result['reason']}")
+        except Exception as e:
+            safe_log('ERROR', f"Error processing artist {args.artist_id}: {e}")
+        finally:
+            close_all_connections()
+    else:
+        # For multiple artists, use parallelism with careful connection management
+        try:
+            # Initialize connection pools before starting parallel processing
+            setup_ssh_tunnel()  # Ensure tunnel is established first
+            
+            # Process all artists in parallel with batch approach
+            process_all_artists_parallel(worker_count, args.artist_limit, args.artist_id)
+        except Exception as e:
+            safe_log('ERROR', f"Fatal error: {e}")
+        finally:
+            close_all_connections()
     
-    try:
-        # Process all artists in parallel
-        process_all_artists_parallel(args.workers, args.artist_limit, args.artist_id)
-    finally:
-        # Ensure all connections are closed
-        close_all_connections()
-        
     safe_log('INFO', "Artist MLDR calculation complete")
