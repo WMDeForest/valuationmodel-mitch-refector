@@ -144,19 +144,19 @@ with tab1:
         # ===== DATA PROCESSING SECTION =====
         # 1. DATA LOADING
         # Read the uploaded CSV file
-        df = pd.read_csv(uploaded_file)
+        artist_monthly_listeners_df = pd.read_csv(uploaded_file)
         
         # 2. DATA VALIDATION
         # Check if required columns exist
-        if validate_columns(df, ['Date', 'Monthly Listeners']):
+        if validate_columns(artist_monthly_listeners_df, ['Date', 'Monthly Listeners']):
             # 3. DATA SELECTION
             # Keep only required columns
             columns_to_keep = ['Date', 'Monthly Listeners']
-            df = select_columns(df, columns_to_keep)
+            artist_monthly_listeners_df = select_columns(artist_monthly_listeners_df, columns_to_keep)
             
             # 4. DATE CONVERSION
             # Convert 'Date' column to datetime format with error handling
-            df, date_issues = convert_to_datetime(df, 'Date', dayfirst=True)
+            artist_monthly_listeners_df, date_issues = convert_to_datetime(artist_monthly_listeners_df, 'Date', dayfirst=True)
             
             # Display any issues with date conversion
             for issue in date_issues:
@@ -168,11 +168,11 @@ with tab1:
            
             # 5. INITIAL DECAY ANALYSIS
             # Calculate decay rates and get min/max dates for the UI slider
-            initial_results = analyze_listener_decay(df)
+            listener_decay_analysis = analyze_listener_decay(artist_monthly_listeners_df)
 
             # ===== UI COMPONENTS SECTION =====
-            min_date = initial_results['min_date']
-            max_date = initial_results['max_date']
+            min_date = listener_decay_analysis['min_date']
+            max_date = listener_decay_analysis['max_date']
             
             # 6. DATE RANGE SELECTION
             st.write("Select Date Range:")
@@ -191,10 +191,10 @@ with tab1:
             if start_date and end_date:
                 # ===== CORE ANALYSIS SECTION =====
                 # 7. RUN DECAY RATE ANALYSIS WITH SELECTED DATE RANGE
-                results = analyze_listener_decay(df, start_date, end_date)
-                subset_df = results['subset_df']
-                mldr = results['mldr']
-                popt = results['popt']
+                filtered_decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
+                date_filtered_listener_data = filtered_decay_analysis['date_filtered_listener_data']
+                mldr = filtered_decay_analysis['mldr']
+                fitted_decay_parameters = filtered_decay_analysis['fitted_decay_parameters']
                 
                 # ===== RESULTS DISPLAY SECTION =====
                 # 8. SHOW METRICS
@@ -203,9 +203,9 @@ with tab1:
                 # 9. VISUALIZATION
                 fig, ax = plt.subplots(figsize=(10, 4))
                 # Plot the moving average
-                ax.plot(subset_df['Date'], subset_df['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
+                ax.plot(date_filtered_listener_data['Date'], date_filtered_listener_data['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
                 # Plot the fitted decay curve using pre-calculated parameters
-                ax.plot(subset_df['Date'], exponential_decay(subset_df['Months'], *popt), 
+                ax.plot(date_filtered_listener_data['Date'], exponential_decay(date_filtered_listener_data['Months'], *fitted_decay_parameters), 
                        label='Fitted Decay Curve', color='red', linestyle='--')
                 
                 # Plot formatting and styling

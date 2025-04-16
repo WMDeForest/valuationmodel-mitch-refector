@@ -8,7 +8,7 @@ and the forecasting process, extracting the key parameters that drive prediction
 import numpy as np
 from scipy.optimize import curve_fit
 from utils.decay_models.core import piecewise_exp_decay, exponential_decay
-from utils.decay_models.preprocessing import remove_anomalies
+from utils.data_processing import remove_anomalies
 from utils.data_processing import sample_data
 
 def fit_segment(months_since_release, streams):
@@ -75,9 +75,9 @@ def fit_decay_curve(monthly_data):
                       Must be pre-processed with remove_anomalies()
         
     Returns:
-        tuple: (mldr, popt) where:
+        tuple: (mldr, fitted_decay_parameters) where:
                - mldr is the Monthly Listener Decay Rate (a decimal value)
-               - popt is the array of fitted parameters [S0, k], where
+               - fitted_decay_parameters is the array of fitted parameters [S0, k], where
                  S0 is the initial listeners value and k is the decay rate
     
     Example:
@@ -97,11 +97,11 @@ def fit_decay_curve(monthly_data):
     y_data = monthly_data['4_Week_MA']
 
     # Use initial guesses for curve fitting - max value as starting point, typical decay rate
-    popt, _ = curve_fit(exponential_decay, x_data, y_data, p0=(max(y_data), 0.1))
+    fitted_decay_parameters, _ = curve_fit(exponential_decay, x_data, y_data, p0=(max(y_data), 0.1))
 
     # Extract the decay rate (b) - this is the MLDR (Music Listener Decay Rate)
-    decay_rate = popt[1]
-    return decay_rate, popt 
+    decay_rate = fitted_decay_parameters[1]
+    return decay_rate, fitted_decay_parameters 
 
 def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None, sample_rate=7):
     """
@@ -142,9 +142,9 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     --------
     dict: A complete results package containing:
         mldr: Monthly Listener Decay Rate (decimal value, e.g. 0.05 = 5% monthly decline)
-        popt: Fitted parameters [S0, k] for the exponential decay model
+        fitted_decay_parameters: Fitted parameters [S0, k] for the exponential decay model
               (S0 is initial listener count, k is decay rate)
-        subset_df: Processed DataFrame with calculated columns:
+        date_filtered_listener_data: Processed DataFrame with calculated columns:
                    - '4_Week_MA': Moving average (smoothed listener counts)
                    - 'Months': Months since first date
                    - 'is_anomaly': Flags for identified anomalies
@@ -164,7 +164,7 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     print(f"Monthly decay rate: {decay_rate:.2%}")  # e.g. "5.25%"
     
     # Visualize the data with matplotlib:
-    plt.plot(results['subset_df']['Date'], results['subset_df']['4_Week_MA'])
+    plt.plot(results['date_filtered_listener_data']['Date'], results['date_filtered_listener_data']['4_Week_MA'])
     ```
     
     Notes:
@@ -174,14 +174,14 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     - The MLDR is a key metric for valuation models and forecasting
     """
     # Ensure data is sorted
-    df = df_monthly_listeners.sort_values(by='Date')
+    sorted_monthly_listeners = df_monthly_listeners.sort_values(by='Date')
     
     # Sample data if needed (e.g., keep every 7th row for weekly sampling)
     if sample_rate and sample_rate > 1:
-        df = sample_data(df, sample_rate)
+        sorted_monthly_listeners = sample_data(sorted_monthly_listeners, sample_rate)
     
     # Process anomalies
-    monthly_data = remove_anomalies(df)
+    monthly_data = remove_anomalies(sorted_monthly_listeners)
     
     # Get min/max dates
     min_date = monthly_data['Date'].min().to_pydatetime()
@@ -190,22 +190,22 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     # Filter by date if specified
     if start_date and end_date:
         mask = (monthly_data['Date'] >= start_date) & (monthly_data['Date'] <= end_date)
-        subset_df = monthly_data[mask]
+        date_filtered_listener_data = monthly_data[mask]
     else:
-        subset_df = monthly_data
+        date_filtered_listener_data = monthly_data
     
     # Calculate months since first date
-    subset_df['Months'] = subset_df['Date'].apply(
+    date_filtered_listener_data['Months'] = date_filtered_listener_data['Date'].apply(
         lambda x: (x.year - min_date.year) * 12 + x.month - min_date.month
     )
     
     # Calculate decay rate
-    mldr, popt = fit_decay_curve(subset_df)
+    mldr, fitted_decay_parameters = fit_decay_curve(date_filtered_listener_data)
     
     return {
         'mldr': mldr, 
-        'popt': popt,
-        'subset_df': subset_df,
+        'fitted_decay_parameters': fitted_decay_parameters,
+        'date_filtered_listener_data': date_filtered_listener_data,
         'min_date': min_date,
         'max_date': max_date
     }
