@@ -463,11 +463,11 @@ with tab1:
                 # ===== 12. STORE FORECAST SUMMARY =====
                 track_valuation_summaries.append({
                     'track_name': selected_song,
-                    'historical_streams': total_historical_track_streams,
-                    'forecast_streams': total_track_streams_forecast,
-                    'historical_royalty_value': historical_royalty_value_time_adjusted,
-                    'undiscounted_future_royalty': undiscounted_future_royalty_value,
-                    'discounted_future_royalty': discounted_future_royalty_value,
+                    'total_historical_track_streams': total_historical_track_streams,
+                    'total_track_streams_forecast': total_track_streams_forecast,
+                    'historical_royalty_value_time_adjusted': historical_royalty_value_time_adjusted,
+                    'undiscounted_future_royalty_value': undiscounted_future_royalty_value,
+                    'discounted_future_royalty_value': discounted_future_royalty_value,
                     'total_track_valuation': total_track_valuation,
                 })
 

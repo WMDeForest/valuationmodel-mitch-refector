@@ -196,18 +196,18 @@ def apply_ownership_adjustments(track_valuation_results_df, ownership_df):
     adjusted_df['Ownership(%)'] = pd.to_numeric(adjusted_df['Ownership(%)'], errors='coerce').fillna(1)
     
     # Adjust historical value based on MLC claims and ownership percentage
-    adjusted_df['historical_royalty_value'] = adjusted_df.apply(
+    adjusted_df['historical_royalty_value_time_adjusted'] = adjusted_df.apply(
         lambda row: min(
-            (1 - row['MLC Claimed(%)']) * row['historical_royalty_value'], 
-            row['Ownership(%)'] * row['historical_royalty_value']
+            (1 - row['MLC Claimed(%)']) * row['historical_royalty_value_time_adjusted'], 
+            row['Ownership(%)'] * row['historical_royalty_value_time_adjusted']
         ),
         axis=1
     )
     
     # Adjust forecast values based on ownership percentage
-    adjusted_df['undiscounted_future_royalty'] = adjusted_df['undiscounted_future_royalty'].astype(float) * adjusted_df['Ownership(%)']
-    adjusted_df['discounted_future_royalty'] = adjusted_df['discounted_future_royalty'].astype(float) * adjusted_df['Ownership(%)']
-    adjusted_df['total_track_valuation'] = adjusted_df['discounted_future_royalty'] + adjusted_df['historical_royalty_value']
+    adjusted_df['undiscounted_future_royalty_value'] = adjusted_df['undiscounted_future_royalty_value'].astype(float) * adjusted_df['Ownership(%)']
+    adjusted_df['discounted_future_royalty_value'] = adjusted_df['discounted_future_royalty_value'].astype(float) * adjusted_df['Ownership(%)']
+    adjusted_df['total_track_valuation'] = adjusted_df['discounted_future_royalty_value'] + adjusted_df['historical_royalty_value_time_adjusted']
     
     # Remove ownership columns after applying adjustments
     adjusted_df = adjusted_df.drop(columns=['Ownership(%)', 'MLC Claimed(%)'])
