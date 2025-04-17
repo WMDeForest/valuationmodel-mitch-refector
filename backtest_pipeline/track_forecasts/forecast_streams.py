@@ -35,6 +35,17 @@ from utils.database import (
     close_all_connections
 )
 
+# Import track stream forecasting utilities
+from utils.track_stream_forecasting import (
+    extract_track_metrics,
+    build_complete_track_forecast,
+    calculate_track_decay_rates_by_segment,
+    track_lifecycle_segment_boundaries
+)
+from utils.data_processing import (
+    calculate_monthly_stream_averages
+)
+
 # Always register the cleanup function to ensure proper shutdown
 atexit.register(close_all_connections)
 
@@ -131,13 +142,46 @@ def get_training_data(cm_track_id, cm_artist_id):
     recent_data = track_data.sort_values('date', ascending=False).head(30)
     track_streams_last_30days = float(recent_data['daily_streams'].sum())
     
-    return training_data_id, track_streams_last_30days, months_since_release
+    return training_data_id, track_streams_last_30days, months_since_release, track_data
+
+def get_default_decay_parameters():
+    """
+    Get default decay parameters for track forecasting.
+    
+    Returns:
+        tuple: (fitted_params_df, sp_range, sp_reach) with default values
+    """
+    # Create default fitted parameters DataFrame with decay rates for each segment
+    segments = list(range(1, len(track_lifecycle_segment_boundaries)))
+    # These are placeholder decay rates, should be adjusted based on actual data analysis
+    decay_rates = [0.15, 0.08, 0.04, 0.02, 0.01]  # Higher rates for early segments, lower for later
+    
+    fitted_params_df = pd.DataFrame({
+        'segment': segments,
+        'k': decay_rates
+    })
+    
+    # Create default stream influence factor ranges
+    sp_range = pd.DataFrame({
+        'RangeStart': [0, 100000, 500000, 1000000, 5000000],
+        'RangeEnd': [100000, 500000, 1000000, 5000000, float('inf')],
+        'Column 1': ['low', 'medium_low', 'medium', 'medium_high', 'high']
+    })
+    
+    # Create default stream influence adjustment factors
+    sp_reach = pd.DataFrame({
+        'low': [0.18, 0.10, 0.05, 0.03, 0.015],
+        'medium_low': [0.17, 0.09, 0.045, 0.025, 0.012],
+        'medium': [0.16, 0.08, 0.04, 0.02, 0.01],
+        'medium_high': [0.15, 0.07, 0.035, 0.018, 0.009],
+        'high': [0.14, 0.06, 0.03, 0.015, 0.008]
+    })
+    
+    return fitted_params_df, sp_range, sp_reach
 
 def generate_track_forecasts(cm_track_id, cm_artist_id, mldr=None):
     """
     Generate stream forecasts for a specific track.
-    
-    This function needs to be rebuilt.
     
     Args:
         cm_track_id: ChartMetric track ID
@@ -147,9 +191,83 @@ def generate_track_forecasts(cm_track_id, cm_artist_id, mldr=None):
     Returns:
         list: List of forecast dictionaries or None if forecasting failed
     """
-    # Placeholder for the new implementation
-    logger.warning("The track forecasting function needs to be rebuilt.")
-    return None
+    # Step 1: Get track training data
+    training_data_result = get_training_data(cm_track_id, cm_artist_id)
+    if training_data_result[0] is None:
+        logger.warning(f"Cannot generate forecasts: insufficient training data for track {cm_track_id}")
+        return None
+    
+    training_data_id, track_streams_last_30days, months_since_release_total, track_data = training_data_result
+    
+    # Step 2: Get MLDR if not provided
+    if mldr is None:
+        mldr = get_artist_mldr(cm_artist_id)
+        if mldr is None:
+            logger.warning(f"No MLDR found for artist {cm_artist_id}, using default value")
+            mldr = 0.05  # Default MLDR value if none found
+    
+    # Step 3: Extract track metrics from training data
+    # Convert days_from_release to months
+    track_data['months_from_release'] = track_data['days_from_release'] / 30.44
+    months_since_release = track_data['months_from_release'].to_list()
+    
+    # Calculate monthly stream averages
+    monthly_averages = calculate_monthly_stream_averages(
+        months=months_since_release,
+        streams=track_data['daily_streams'].to_list()
+    )
+    
+    # Create track metrics dictionary
+    track_metrics = {
+        'months_since_release': months_since_release,
+        'monthly_averages': monthly_averages,
+        'track_streams_last_30days': track_streams_last_30days,
+        'months_since_release_total': months_since_release_total
+    }
+    
+    # Step 4: Get default decay parameters
+    fitted_params_df, sp_range, sp_reach = get_default_decay_parameters()
+    
+    # Step 5: Set forecast parameters
+    forecast_periods = 60  # 5 years of monthly forecasts
+    
+    # Simple estimation for stream influence factor based on last 30 days streams
+    # This should be improved with actual data from the track
+    stream_influence_factor = min(track_streams_last_30days * 10, 5000000)
+    
+    # Step 6: Generate forecasts
+    try:
+        forecast_result = build_complete_track_forecast(
+            track_metrics=track_metrics,
+            mldr=mldr,
+            fitted_params_df=fitted_params_df,
+            stream_influence_factor=stream_influence_factor,
+            sp_range=sp_range,
+            sp_reach=sp_reach,
+            track_lifecycle_segment_boundaries=track_lifecycle_segment_boundaries,
+            forecast_periods=forecast_periods
+        )
+        
+        # Step 7: Format forecasts for database storage
+        forecasts = []
+        for _, row in forecast_result['forecast_df'].iterrows():
+            forecast = {
+                'month': int(row['month']),
+                'predicted_streams_for_month': float(row['predicted_streams_for_month']),
+                'segment_used': int(row['segment_used']),
+                'time_used': int(row['time_used']),
+                'cm_track_id': cm_track_id,
+                'cm_artist_id': cm_artist_id,
+                'training_data_id': training_data_id
+            }
+            forecasts.append(forecast)
+        
+        logger.info(f"Generated {len(forecasts)} forecast periods for track {cm_track_id}")
+        return forecasts
+    
+    except Exception as e:
+        logger.error(f"Error generating forecasts for track {cm_track_id}: {str(e)}")
+        return None
 
 def store_forecasts(forecasts):
     """

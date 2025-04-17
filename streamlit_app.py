@@ -51,12 +51,10 @@ from utils.decay_rates import (
 
 # Import decay model functions from the new modules
 from utils.decay_models import (
-    piecewise_exp_decay,
     exponential_decay,
     remove_anomalies,
     fit_decay_curve,
-    analyze_listener_decay,
-    prepare_decay_rate_fitting_data
+    analyze_listener_decay
 )
 
 # Import track forecasting functions (now including parameter update functions)
@@ -69,7 +67,9 @@ from utils.track_stream_forecasting import (
     create_decay_rate_dataframe,
     adjust_track_decay_rates,
     calculate_track_decay_rates_by_segment,
-    calculate_monthly_stream_projections
+    calculate_monthly_stream_projections,
+    prepare_decay_rate_fitting_data,
+    piecewise_exp_decay
 )
 
 # Import UI functions

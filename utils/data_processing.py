@@ -281,7 +281,7 @@ def extract_track_metrics(track_data_df, track_name=None):
         Dictionary containing basic track metrics
     """
     # Import here to avoid circular imports
-    from utils.decay_models.fitting import prepare_decay_rate_fitting_data
+    from utils.track_stream_forecasting import prepare_decay_rate_fitting_data
     
     # Extract base metrics from the track data
     earliest_track_date = extract_earliest_date(track_data_df, 'Date')

@@ -17,9 +17,30 @@ from utils.data_processing import (
     calculate_monthly_stream_averages,
     extract_track_metrics
 )
-from utils.decay_models.fitting import prepare_decay_rate_fitting_data
-from utils.decay_models.core import piecewise_exp_decay
 from utils.decay_rates import track_lifecycle_segment_boundaries
+
+def piecewise_exp_decay(x, S0, k):
+    """
+    Core piecewise exponential decay function that models stream decay over time.
+    
+    This function implements the standard exponential decay formula S(t) = S0 * e^(-kt),
+    where S0 is the initial value and k is the decay rate constant. The "piecewise" aspect 
+    comes from using different k values for different time segments after release, which is 
+    handled in the forecasting module.
+    
+    Args:
+        x: Time variable (typically months since release)
+        S0: Initial value (starting number of streams)
+        k: Decay rate constant (higher values = faster decay)
+        
+    Returns:
+        Decayed value at time x (predicted streams at month x)
+    
+    Example:
+        >>> piecewise_exp_decay(3, 100000, 0.1)  # After 3 months with decay rate 0.1
+        74081.82234034616  # Streams in month 3
+    """
+    return S0 * np.exp(-k * x)
 
 def calculate_monthly_stream_projections(consolidated_df, initial_value, start_period, forecast_periods):
     """
@@ -346,6 +367,49 @@ def calculate_track_decay_rates_by_segment(adjusted_df, segment_boundaries):
     })
     
     return segmented_track_decay_rates_df 
+
+def prepare_decay_rate_fitting_data(months_since_release, avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3, streams_last_30days):
+    """
+    Prepare data arrays for decay rate fitting model.
+    
+    Parameters:
+    -----------
+    months_since_release : int
+        Number of months since the track was released
+    avg_monthly_streams_months_4to12 : float
+        Average monthly streams for months 4-12
+    avg_monthly_streams_months_2to3 : float
+        Average monthly streams for months 2-3
+    streams_last_30days : float
+        Total streams in the last month (last 30 days)
+        
+    Returns:
+    --------
+    tuple:
+        (months_array, averages_array)
+        NumPy arrays containing the months since release and corresponding average stream values
+    """
+    # ===== CREATE HISTORICAL DATA POINTS FOR DECAY CURVE FITTING =====
+    # This creates three data points at different points in the track's history:
+    # 1. A point representing month 12 (or earliest available if track is newer)
+    # 2. A point representing month 3 (or earliest available if track is newer)
+    # 3. A point representing the current month
+    # These three points will be used to fit an exponential decay curve
+    months_array = np.array([
+        max((months_since_release - 11), 0),  # 12 months ago (or 0 if track is newer)
+        max((months_since_release - 2), 0),   # 3 months ago (or 0 if track is newer)
+        months_since_release - 0              # Current month
+    ])
+    
+    # ===== CREATE CORRESPONDING STREAM VALUES =====
+    # For each month in the months_array, we provide the corresponding stream value:
+    # 1. The avg monthly streams from months 4-12 for the first point
+    # 2. The avg monthly streams from months 2-3 for the second point 
+    # 3. The actual streams from the last 30 days for the current month
+    # This gives us a time series of points showing how stream volume has changed over time
+    averages_array = np.array([avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3, streams_last_30days])
+    
+    return months_array, averages_array
 
 def fit_segment(months_since_release, streams):
     """

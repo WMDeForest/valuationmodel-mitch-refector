@@ -48,19 +48,20 @@ forecasts = forecast_track_streams(params_df, initial_value, start_period, perio
 ```
 """
 
-from utils.decay_models.core import piecewise_exp_decay, exponential_decay
+from utils.decay_models.core import exponential_decay
 from utils.data_processing import remove_anomalies
 from utils.decay_models.fitting import (
     fit_decay_curve, 
-    analyze_listener_decay,
-    prepare_decay_rate_fitting_data
+    analyze_listener_decay
 )
 from utils.track_stream_forecasting import (
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_track_decay_rates,
     calculate_track_decay_rates_by_segment,
-    calculate_monthly_stream_projections
+    calculate_monthly_stream_projections,
+    prepare_decay_rate_fitting_data,
+    piecewise_exp_decay
 )
 
 # For backward compatibility
