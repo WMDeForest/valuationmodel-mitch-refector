@@ -60,7 +60,7 @@ from utils.decay_models.parameter_updates import (
     adjust_track_decay_rates,
     calculate_track_decay_rates_by_segment
 )
-from utils.decay_models.forecasting import forecast_track_streams
+from utils.decay_models.forecasting import calculate_monthly_stream_projections
 
 # For backward compatibility
 from utils.decay_models.fitting import calculate_decay_rate, calculate_monthly_listener_decay
@@ -74,7 +74,7 @@ __all__ = [
     'fit_segment',
     'update_fitted_params',
     'get_decay_parameters',
-    'forecast_track_streams',
+    'calculate_monthly_stream_projections',
     'generate_track_decay_rates_by_month',
     'create_decay_rate_dataframe',
     'adjust_track_decay_rates',
@@ -82,4 +82,7 @@ __all__ = [
     # For backward compatibility
     'calculate_decay_rate',
     'calculate_monthly_listener_decay',
-] 
+]
+
+# For backward compatibility
+forecast_track_streams = calculate_monthly_stream_projections 

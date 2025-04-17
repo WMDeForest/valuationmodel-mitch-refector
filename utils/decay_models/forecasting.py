@@ -11,9 +11,9 @@ from utils.decay_rates import track_lifecycle_segment_boundaries
 # Define valuation parameters
 DEFAULT_FORECAST_YEARS = 20  # Default forecast period in years
 
-def forecast_track_streams(consolidated_df, initial_value, start_period, forecast_periods):
+def calculate_monthly_stream_projections(consolidated_df, initial_value, start_period, forecast_periods):
     """
-    Generate forecasts for future streaming values using segmented decay rates.
+    Generate month-by-month stream projections using segmented decay rates.
     
     This function is the heart of the valuation model's forecasting capability.
     It generates month-by-month stream predictions by:

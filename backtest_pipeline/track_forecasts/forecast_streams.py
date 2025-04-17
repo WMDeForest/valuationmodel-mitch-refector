@@ -39,7 +39,7 @@ from utils.database import (
 from utils.decay_models import (
     adjust_track_decay_rates,
     calculate_track_decay_rates_by_segment,
-    forecast_track_streams
+    calculate_monthly_stream_projections
 )
 
 from utils.decay_models.parameter_updates import (
@@ -224,7 +224,7 @@ def generate_track_forecasts(cm_track_id, cm_artist_id, mldr=None):
     )
     
     # Generate stream forecasts
-    forecasts = forecast_track_streams(
+    forecasts = calculate_monthly_stream_projections(
         segmented_track_decay_rates_df,
         track_streams_last_30days,
         int(months_since_release),

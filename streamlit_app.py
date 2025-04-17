@@ -60,7 +60,7 @@ from utils.decay_models import (
     fit_segment,
     update_fitted_params,
     get_decay_parameters,
-    forecast_track_streams,
+    calculate_monthly_stream_projections,
     analyze_listener_decay
 )
 
@@ -170,7 +170,7 @@ def extract_track_metrics(track_data_df, track_name=None):
     
     return metrics
 
-def generate_track_streams_forecast(
+def build_complete_track_forecast(
     track_metrics,
     mldr,
     fitted_params_df,
@@ -181,7 +181,13 @@ def generate_track_streams_forecast(
     forecast_periods
 ):
     """
-    Generate stream forecasts using pre-calculated track metrics.
+    Build a complete track forecast by coordinating the end-to-end forecasting process.
+    
+    This high-level function orchestrates the entire forecasting pipeline:
+    1. Prepares decay parameters and rates
+    2. Fits the decay model to track data
+    3. Adjusts rates based on observed patterns
+    4. Generates the final stream projections
     
     Parameters:
     -----------
@@ -257,7 +263,7 @@ def generate_track_streams_forecast(
     )
     
     # 8. Generate stream forecasts
-    track_streams_forecast = forecast_track_streams(
+    track_streams_forecast = calculate_monthly_stream_projections(
         segmented_track_decay_rates_df, 
         track_streams_last_30days, 
         months_since_release_total, 
@@ -461,7 +467,7 @@ with tab1:
                 )
                 
                 # Step 2: Generate track stream forecast using the metrics
-                forecast_result = generate_track_streams_forecast(
+                forecast_result = build_complete_track_forecast(
                     track_metrics=track_metrics,
                     mldr=mldr,  # From artist-level analysis done earlier
                     fitted_params_df=fitted_params_df,
