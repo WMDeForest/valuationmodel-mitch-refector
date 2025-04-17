@@ -249,7 +249,8 @@ with tab1:
             track_names.append(track_name_unique)
 
     # ===== UI DISPLAY AND TRACK SELECTION =====
-    selected_songs = st.multiselect("Select Songs to Analyze", track_names)
+    # Set default selection to all tracks
+    selected_songs = st.multiselect("Select Songs to Analyze", track_names, default=track_names)
     
     # ===== FINANCIAL PARAMETERS =====
     # The discount rate is used to:
