@@ -32,7 +32,6 @@ from utils.data_processing import (
     validate_columns,
     extract_earliest_date,
     calculate_period_streams,
-    process_audience_geography,
     process_ownership_data,
     calculate_months_since_release,
     calculate_monthly_stream_averages
@@ -101,7 +100,8 @@ from utils.forecast_projections import (
 # Import geographic analysis functions
 from utils.geographic_analysis import (
     process_country_breakdown,
-    get_top_countries
+    get_top_countries,
+    process_audience_geography
 )
 
 # Import fraud detection

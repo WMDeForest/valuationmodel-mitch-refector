@@ -121,61 +121,6 @@ def calculate_period_streams(df, cumulative_column, days_back):
         
     return period_streams
 
-def process_audience_geography(geography_file=None):
-    """
-    Process audience geography data from uploaded file.
-    Returns a DataFrame with audience distribution and the USA percentage.
-    
-    Parameters:
-    -----------
-    geography_file : file object, optional
-        The uploaded CSV file containing audience geography data
-        
-    Returns:
-    --------
-    tuple:
-        A tuple containing two elements:
-        
-        listener_geography_df : pandas.DataFrame
-            A DataFrame containing geographical distribution of listeners with columns:
-            - 'Country': The country name
-            - 'Spotify Monthly Listeners': Raw count of listeners from this country
-            - 'Spotify monthly listeners (%)': Percentage of total listeners (as a decimal)
-            This data is used to apply country-specific royalty rates during valuation.
-            
-        listener_percentage_usa : float
-            The proportion of listeners from the United States as a decimal (0.0-1.0).
-            This is extracted from the listener_geography_df for convenience since US streams
-            are often calculated separately in royalty formulas.
-            Defaults to 1.0 (100% USA) if no geography data is provided or if USA
-            is not found in the data.
-    """
-    # Default value if no geography data
-    listener_percentage_usa = 1.0
-    listener_geography_df = pd.DataFrame()
-    
-    if geography_file:
-        # Process uploaded file
-        listener_geography_df = pd.read_csv(geography_file)
-        
-        # Extract and process geographical data
-        listener_geography_df = listener_geography_df[['Country', 'Spotify Monthly Listeners']]
-        listener_geography_df = listener_geography_df.groupby('Country', as_index=False)['Spotify Monthly Listeners'].sum()
-        
-        # Calculate percentage distribution
-        total_listeners = listener_geography_df['Spotify Monthly Listeners'].sum()
-        listener_geography_df['Spotify monthly listeners (%)'] = (listener_geography_df['Spotify Monthly Listeners'] / total_listeners) * 100
-        
-        # Normalize percentage values
-        listener_geography_df["Spotify monthly listeners (%)"] = pd.to_numeric(listener_geography_df["Spotify monthly listeners (%)"], errors='coerce')
-        listener_geography_df["Spotify monthly listeners (%)"] = listener_geography_df["Spotify monthly listeners (%)"] / 100
-        
-        # Extract US percentage for royalty calculations
-        if "United States" in listener_geography_df["Country"].values:
-            listener_percentage_usa = listener_geography_df.loc[listener_geography_df["Country"] == "United States", "Spotify monthly listeners (%)"].values[0]
-    
-    return listener_geography_df, listener_percentage_usa
-
 def process_ownership_data(ownership_file, track_names):
     """
     Process song ownership data from uploaded file.
