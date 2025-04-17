@@ -35,28 +35,6 @@ from utils.database import (
     close_all_connections
 )
 
-# Import decay model utilities
-from utils.decay_models import (
-    adjust_track_decay_rates,
-    calculate_track_decay_rates_by_segment,
-    calculate_monthly_stream_projections
-)
-
-from utils.decay_models.parameter_updates import (
-    generate_track_decay_rates_by_month,
-    create_decay_rate_dataframe
-)
-
-# Import decay rate parameters
-from utils.decay_rates import (
-    track_lifecycle_segment_boundaries,
-    DEFAULT_FORECAST_PERIODS,
-    DEFAULT_STREAM_INFLUENCE_FACTOR,
-    fitted_params_df,
-    sp_range,
-    SP_REACH
-)
-
 # Always register the cleanup function to ensure proper shutdown
 atexit.register(close_all_connections)
 
@@ -66,17 +44,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('forecast_streams')
-
-def get_decay_parameters():
-    """
-    Get the decay parameters for forecasting.
-    
-    Returns:
-        DataFrame: DataFrame containing decay parameters for different segments.
-    """
-    # Get decay rates based on fitted parameters from the decay rates module
-    decay_rates_df = fitted_params_df.copy()
-    return decay_rates_df
 
 def get_artist_mldr(cm_artist_id):
     """
@@ -170,6 +137,8 @@ def generate_track_forecasts(cm_track_id, cm_artist_id, mldr=None):
     """
     Generate stream forecasts for a specific track.
     
+    This function needs to be rebuilt.
+    
     Args:
         cm_track_id: ChartMetric track ID
         cm_artist_id: ChartMetric artist ID
@@ -178,66 +147,9 @@ def generate_track_forecasts(cm_track_id, cm_artist_id, mldr=None):
     Returns:
         list: List of forecast dictionaries or None if forecasting failed
     """
-    # Get track training data
-    training_data_id, track_streams_last_30days, months_since_release = get_training_data(cm_track_id, cm_artist_id)
-    
-    if not training_data_id:
-        return None
-    
-    # Get artist MLDR if not provided
-    if mldr is None:
-        mldr = get_artist_mldr(cm_artist_id)
-        if mldr is None:
-            logger.warning(f"Unable to forecast without MLDR for artist {cm_artist_id}")
-            return None
-    
-    # Get decay parameters
-    decay_rates_df = get_decay_parameters()
-    
-    # Generate track-specific decay rates for all forecast months
-    track_monthly_decay_rates = generate_track_decay_rates_by_month(decay_rates_df, track_lifecycle_segment_boundaries)
-    
-    # Determine the observed time range from the track's streaming data
-    track_data_start_month = 1  # Assuming we start from month 1
-    track_data_end_month = int(months_since_release)
-    
-    # Create a structured DataFrame that combines model-derived decay rates with observed data
-    track_decay_rate_df = create_decay_rate_dataframe(
-        track_months_since_release=list(range(1, 501)),  # Forecast for 500 months
-        track_monthly_decay_rates=track_monthly_decay_rates,
-        mldr=mldr,
-        track_data_start_month=track_data_start_month,
-        track_data_end_month=track_data_end_month
-    )
-    
-    # Fit the track's decay pattern based on a placeholder k value (we don't have actual track_decay_k)
-    # This is a simplification - in a real scenario, we'd calculate this from actual data
-    adjusted_track_decay_df, _ = adjust_track_decay_rates(
-        track_decay_rate_df,
-        track_decay_k=0.05  # Using a default value as we don't have the actual fitted value
-    )
-    
-    # Calculate average decay rates for each segment
-    segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(
-        adjusted_track_decay_df, 
-        track_lifecycle_segment_boundaries
-    )
-    
-    # Generate stream forecasts
-    forecasts = calculate_monthly_stream_projections(
-        segmented_track_decay_rates_df,
-        track_streams_last_30days,
-        int(months_since_release),
-        DEFAULT_FORECAST_PERIODS
-    )
-    
-    # Add metadata to each forecast
-    for forecast in forecasts:
-        forecast['cm_track_id'] = int(cm_track_id) if isinstance(cm_track_id, (np.integer, np.floating)) else cm_track_id
-        forecast['cm_artist_id'] = int(cm_artist_id) if isinstance(cm_artist_id, (np.integer, np.floating)) else cm_artist_id
-        forecast['training_data_id'] = int(training_data_id) if isinstance(training_data_id, (np.integer, np.floating)) else training_data_id
-    
-    return forecasts
+    # Placeholder for the new implementation
+    logger.warning("The track forecasting function needs to be rebuilt.")
+    return None
 
 def store_forecasts(forecasts):
     """
