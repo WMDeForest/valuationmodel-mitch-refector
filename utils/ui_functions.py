@@ -41,13 +41,13 @@ def format_valuation_results(valuation_df):
     formatted_df = valuation_df.copy()
     
     # Format stream counts with commas
-    formatted_df['historical_streams'] = formatted_df['historical_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
-    formatted_df['forecast_streams'] = formatted_df['forecast_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
+    formatted_df['total_historical_track_streams'] = formatted_df['total_historical_track_streams'].astype(float).apply(lambda x: f"{int(round(x)):,}")
+    formatted_df['total_track_streams_forecast'] = formatted_df['total_track_streams_forecast'].astype(float).apply(lambda x: f"{int(round(x)):,}")
     
     # Format monetary values with dollar signs and commas
-    formatted_df['undiscounted_future_royalty'] = formatted_df['undiscounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-    formatted_df['discounted_future_royalty'] = formatted_df['discounted_future_royalty'].astype(float).apply(lambda x: f"${int(round(x)):,}")
-    formatted_df['historical_royalty_value'] = formatted_df['historical_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+    formatted_df['undiscounted_future_royalty_value'] = formatted_df['undiscounted_future_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+    formatted_df['discounted_future_royalty_value'] = formatted_df['discounted_future_royalty_value'].astype(float).apply(lambda x: f"${int(round(x)):,}")
+    formatted_df['historical_royalty_value_time_adjusted'] = formatted_df['historical_royalty_value_time_adjusted'].astype(float).apply(lambda x: f"${int(round(x)):,}")
     formatted_df['total_track_valuation'] = formatted_df['total_track_valuation'].astype(float).apply(lambda x: f"${int(round(x)):,}")
     
     return formatted_df 
@@ -86,17 +86,17 @@ def display_valuation_summary(valuation_df):
     numeric_df = valuation_df.copy()
     
     # Convert string currency values back to numbers for summing
-    for col in ['historical_royalty_value', 'undiscounted_future_royalty', 
-                'discounted_future_royalty', 'total_track_valuation']:
+    for col in ['historical_royalty_value_time_adjusted', 'undiscounted_future_royalty_value', 
+                'discounted_future_royalty_value', 'total_track_valuation']:
         numeric_df[col] = numeric_df[col].str.replace('$', '').str.replace(',', '').astype(float)
     
     # Calculate sums across all tracks in the catalog
     catalog_valuation_summary_df = pd.DataFrame({
         'Metric': ['Historical Value', 'Undiscounted Future Value', 'Discounted Future Value', 'Total Valuation'],
         'Sum': [
-            numeric_df['historical_royalty_value'].sum(),
-            numeric_df['undiscounted_future_royalty'].sum(),
-            numeric_df['discounted_future_royalty'].sum(),
+            numeric_df['historical_royalty_value_time_adjusted'].sum(),
+            numeric_df['undiscounted_future_royalty_value'].sum(),
+            numeric_df['discounted_future_royalty_value'].sum(),
             numeric_df['total_track_valuation'].sum()
         ]
     })
