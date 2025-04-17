@@ -240,13 +240,15 @@ with tab1:
     uploaded_file_3 = st.file_uploader("Audience Geography", type=["csv"])
     uploaded_file_ownership = st.file_uploader("MLC Claimed and Song Ownership", type="csv")
 
-    # Store track names for UI display without processing files yet
+    # Create a mapping of files to track names and build list for UI display
     track_names = []
+    track_files_map = {}
     if uploaded_files_unique:
         for file_unique in uploaded_files_unique:
             # Extract track name from the filename (expected format: "Artist - TrackName.csv")
             track_name_unique = file_unique.name.split(' - ')[1].strip()
             track_names.append(track_name_unique)
+            track_files_map[track_name_unique] = file_unique
 
     # ===== UI DISPLAY AND TRACK SELECTION =====
     # Set default selection to all tracks
@@ -266,75 +268,69 @@ with tab1:
         track_yearly_revenue_collection = []
         export_track_streams_forecast = pd.DataFrame()
         track_valuation_summaries = []
+        track_catalog_df = pd.DataFrame() #DataFrame that will store data for all tracks (our catalog)
         
-        # ===== TRACK DATA PROCESSING =====
-        # Initialize an empty DataFrame that will store data for all tracks (our catalog)
-        track_catalog_df = pd.DataFrame()
-        
-        # Process each uploaded track file - iterate through all CSV files the user uploaded
-        for file_unique in uploaded_files_unique:
-            # Extract track name from the filename (expected format: "Artist - TrackName.csv")
-            track_name_unique = file_unique.name.split(' - ')[1].strip()
-            
-            # Skip processing if the track wasn't selected
-            if track_name_unique not in selected_songs:
-                continue
+        # Process each selected song's data file using our mapping
+        for selected_song in selected_songs:
+            if selected_song in track_files_map:
+                file_unique = track_files_map[selected_song]
+                track_name_unique = selected_song  # We already have the track name
                 
-            # Read the track's streaming data from CSV
-            df_track_data_unique = pd.read_csv(file_unique)
-            
-            # Make column names more descriptive - 'Value' becomes 'CumulativeStreams'
-            df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
+                # Read the track's streaming data from CSV
+                df_track_data_unique = pd.read_csv(file_unique)
+                
+                # Make column names more descriptive - 'Value' becomes 'CumulativeStreams'
+                df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
 
-            # Get the first date from the data (not necessarily release date, just first tracking date)
-            earliest_track_date = extract_earliest_date(df_track_data_unique, 'Date')
-            
-            # Extract the latest (most recent) cumulative stream count
-            total_historical_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
+                # Get the first date from the data (not necessarily release date, just first tracking date)
+                earliest_track_date = extract_earliest_date(df_track_data_unique, 'Date')
+                
+                # Extract the latest (most recent) cumulative stream count
+                total_historical_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
 
-            # Calculate period-specific stream counts using our utility function
-            # These represent streams in the last 30/90/365 days
-            track_streams_last_30days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 30)
-            track_streams_last_90days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 90)
-            track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
-            
-            # Pre-calculate time-based metrics to avoid recalculating after Run All button
-            months_since_release_total = calculate_months_since_release(earliest_track_date)
-            
-            # Calculate monthly averages for different time periods
-            avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
-                track_streams_last_30days,
-                track_streams_last_90days,
-                track_streams_last_365days,
-                months_since_release_total
-            )
-            
-            # Prepare arrays for decay rate fitting
-            months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
-                months_since_release_total,
-                avg_monthly_streams_months_4to12,
-                avg_monthly_streams_months_2to3,
-                track_streams_last_30days
-            )
-            
-            # Create a single row DataFrame containing all key metrics for this track
-            track_data = pd.DataFrame({
-                'track_name': [track_name_unique],
-                'earliest_track_date': [earliest_track_date],  # Keep original format for any other uses
-                'track_streams_last_30days': [track_streams_last_30days],
-                'track_streams_last_90days': [track_streams_last_90days],
-                'track_streams_last_365days': [track_streams_last_365days],
-                'total_historical_track_streams': [total_historical_track_streams],
-                'months_since_release_total': [months_since_release_total],
-                'avg_monthly_streams_months_4to12': [avg_monthly_streams_months_4to12],
-                'avg_monthly_streams_months_2to3': [avg_monthly_streams_months_2to3],
-                'months_since_release': [months_since_release.tolist() if hasattr(months_since_release, 'tolist') else months_since_release],
-                'monthly_averages': [monthly_averages.tolist() if hasattr(monthly_averages, 'tolist') else monthly_averages]
-            })
-            
-            # Add this track's data to our catalog of all tracks
-            # Each time through the loop, we add one more row to the catalog
-            track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
+                # Calculate period-specific stream counts using our utility function
+                # These represent streams in the last 30/90/365 days
+                track_streams_last_30days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 30)
+                track_streams_last_90days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 90)
+                track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
+                
+                # Pre-calculate time-based metrics to avoid recalculating after Run All button
+                months_since_release_total = calculate_months_since_release(earliest_track_date)
+                
+                # Calculate monthly averages for different time periods
+                avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
+                    track_streams_last_30days,
+                    track_streams_last_90days,
+                    track_streams_last_365days,
+                    months_since_release_total
+                )
+                
+                # Prepare arrays for decay rate fitting
+                months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
+                    months_since_release_total,
+                    avg_monthly_streams_months_4to12,
+                    avg_monthly_streams_months_2to3,
+                    track_streams_last_30days
+                )
+                
+                # Create a single row DataFrame containing all key metrics for this track
+                track_data = pd.DataFrame({
+                    'track_name': [track_name_unique],
+                    'earliest_track_date': [earliest_track_date],  # Keep original format for any other uses
+                    'track_streams_last_30days': [track_streams_last_30days],
+                    'track_streams_last_90days': [track_streams_last_90days],
+                    'track_streams_last_365days': [track_streams_last_365days],
+                    'total_historical_track_streams': [total_historical_track_streams],
+                    'months_since_release_total': [months_since_release_total],
+                    'avg_monthly_streams_months_4to12': [avg_monthly_streams_months_4to12],
+                    'avg_monthly_streams_months_2to3': [avg_monthly_streams_months_2to3],
+                    'months_since_release': [months_since_release.tolist() if hasattr(months_since_release, 'tolist') else months_since_release],
+                    'monthly_averages': [monthly_averages.tolist() if hasattr(monthly_averages, 'tolist') else monthly_averages]
+                })
+                
+                # Add this track's data to our catalog of all tracks
+                # Each time through the loop, we add one more row to the catalog
+                track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
 
         # ===== AUDIENCE GEOGRAPHY PROCESSING =====
         # Process the audience geography data to determine geographic distribution of listeners
