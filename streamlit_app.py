@@ -54,18 +54,22 @@ from utils.decay_models import (
     exponential_decay,
     remove_anomalies,
     fit_decay_curve,
-    fit_segment,
-    calculate_monthly_stream_projections,
     analyze_listener_decay,
     prepare_decay_rate_fitting_data
 )
 
-# Import decay rate adjustment functions
-from utils.decay_models.parameter_updates import (
+# Import track forecasting functions (now including parameter update functions)
+from utils.track_stream_forecasting import (
+    extract_track_metrics, 
+    build_complete_track_forecast, 
+    get_decay_parameters, 
+    update_fitted_params, 
+    fit_segment,
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_track_decay_rates,
-    calculate_track_decay_rates_by_segment
+    calculate_track_decay_rates_by_segment,
+    calculate_monthly_stream_projections
 )
 
 # Import UI functions
@@ -106,9 +110,6 @@ from utils.ownership_data import process_ownership_data
 
 # Import fraud detection
 from utils.fraud_detection import detect_streaming_fraud
-
-# Import track stream forecasting functions
-from utils.track_stream_forecasting import extract_track_metrics, build_complete_track_forecast, get_decay_parameters, update_fitted_params
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
 # Load country population data for analyzing geographic streaming patterns

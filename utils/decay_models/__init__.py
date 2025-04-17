@@ -52,17 +52,16 @@ from utils.decay_models.core import piecewise_exp_decay, exponential_decay
 from utils.data_processing import remove_anomalies
 from utils.decay_models.fitting import (
     fit_decay_curve, 
-    fit_segment, 
     analyze_listener_decay,
     prepare_decay_rate_fitting_data
 )
-from utils.decay_models.parameter_updates import (
+from utils.track_stream_forecasting import (
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_track_decay_rates,
-    calculate_track_decay_rates_by_segment
+    calculate_track_decay_rates_by_segment,
+    calculate_monthly_stream_projections
 )
-from utils.decay_models.forecasting import calculate_monthly_stream_projections
 
 # For backward compatibility
 from utils.decay_models.fitting import calculate_decay_rate, calculate_monthly_listener_decay
@@ -73,7 +72,6 @@ __all__ = [
     'remove_anomalies',
     'fit_decay_curve',
     'analyze_listener_decay',
-    'fit_segment',
     'prepare_decay_rate_fitting_data',
     'calculate_monthly_stream_projections',
     'generate_track_decay_rates_by_month',
