@@ -32,7 +32,6 @@ from utils.data_processing import (
     validate_columns,
     extract_earliest_date,
     calculate_period_streams,
-    process_ownership_data,
     calculate_months_since_release,
     calculate_monthly_stream_averages
 )
@@ -103,6 +102,9 @@ from utils.geographic_analysis import (
     get_top_countries,
     process_audience_geography
 )
+
+# Import ownership data functions
+from utils.ownership_data import process_ownership_data
 
 # Import fraud detection
 from utils.fraud_detection import detect_streaming_fraud
