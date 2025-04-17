@@ -7,6 +7,7 @@ forecasts of future streams based on historical patterns and decay models.
 
 import pandas as pd
 import numpy as np
+import streamlit as st
 
 from utils.data_processing import (
     extract_earliest_date,
@@ -17,7 +18,6 @@ from utils.data_processing import (
 from utils.decay_models.fitting import prepare_decay_rate_fitting_data
 from utils.decay_models import (
     fit_segment,
-    get_decay_parameters,
     calculate_monthly_stream_projections
 )
 from utils.decay_models.parameter_updates import (
@@ -26,6 +26,90 @@ from utils.decay_models.parameter_updates import (
     adjust_track_decay_rates,
     calculate_track_decay_rates_by_segment
 )
+
+def update_fitted_params(fitted_params_df, value, sp_range, SP_REACH):
+    """
+    Update fitted decay parameters based on stream influence factor.
+    
+    This function adjusts the base decay rates based on a track's stream influence factor
+    (formerly called Spotify playlist reach). Tracks with higher influence factors typically 
+    have slower decay rates (more sustainability) as they continue to receive streams over time.
+    
+    The adjustment uses a weighted average approach:
+    - 67% weight on the original decay rates
+    - 33% weight on the adjustment factors
+    
+    This balances the intrinsic track decay patterns with the boost from external factors.
+    
+    Args:
+        fitted_params_df: DataFrame with initial fitted parameters
+                         Contains segment numbers and corresponding 'k' values
+        value: Stream influence factor (numeric measure of external streaming influence)
+               [Formerly called Spotify playlist reach]
+        sp_range: DataFrame with ranges for segmentation
+                 Maps influence values to appropriate adjustment columns
+        SP_REACH: DataFrame with adjustment factors for different influence levels
+                 Contains modifier columns for different segments
+        
+    Returns:
+        DataFrame: Updated fitted parameters with adjusted 'k' values
+                  Returns None if the segment is not found in SP_REACH
+    """
+    updated_fitted_params_df = fitted_params_df.copy()
+    
+    # Find the appropriate segment based on the influence factor value
+    # (formerly called playlist reach value)
+    segment = sp_range.loc[(sp_range['RangeStart'] <= value) & 
+                          (sp_range['RangeEnd'] > value), 'Column 1'].iloc[0]
+    
+    # Validate the segment exists in SP_REACH
+    if segment not in SP_REACH.columns:
+        st.error(f"Error: Column '{segment}' not found in SP_REACH.")
+        st.write("Available columns:", SP_REACH.columns)
+        return None
+    
+    # Get the adjustment column and update the decay rate
+    # Uses a weighted average: 67% original value, 33% influence-based adjustment
+    # (formerly called playlist-based adjustment)
+    column_to_append = SP_REACH[segment]
+    updated_fitted_params_df['k'] = updated_fitted_params_df['k'] * 0.67 + column_to_append * 0.33
+
+    return updated_fitted_params_df 
+
+def get_decay_parameters(fitted_params_df, stream_influence_factor, sp_range, sp_reach):
+    """
+    Get decay parameters in both DataFrame and dictionary formats.
+    
+    This is a comprehensive function that returns both the updated parameters DataFrame
+    and the dictionary (records) representation in a single call. It can be used with
+    data from any source (API, CSV, database) as long as the fitted_params_df is provided
+    in the expected format.
+    
+    Args:
+        fitted_params_df: DataFrame with initial fitted parameters
+        stream_influence_factor: Numeric measure of external streaming influence
+        sp_range: DataFrame with ranges for segmentation
+        sp_reach: DataFrame with adjustment factors for different influence levels
+        
+    Returns:
+        tuple: (updated_params_df, updated_params_dict) where:
+               - updated_params_df is the DataFrame with updated parameters
+               - updated_params_dict is the list of dictionaries (records format)
+               
+               Returns (None, None) if parameters could not be updated
+    """
+    updated_params_df = update_fitted_params(
+        fitted_params_df, 
+        stream_influence_factor, 
+        sp_range, 
+        sp_reach
+    )
+    
+    if updated_params_df is not None:
+        updated_params_dict = updated_params_df.to_dict(orient='records')
+        return updated_params_df, updated_params_dict
+    
+    return None, None
 
 def extract_track_metrics(track_data_df, track_name=None):
     """

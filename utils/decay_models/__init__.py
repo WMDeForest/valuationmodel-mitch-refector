@@ -8,8 +8,7 @@ the decay of monthly listener counts over time.
 Core analysis workflow:
 1. Clean and preprocess streaming data with preprocessing.remove_anomalies()
 2. Calculate artist-level decay rate using fitting.fit_decay_curve()
-3. Fine-tune decay model with parameter_updates.update_fitted_params()
-4. Generate future forecasts with forecasting.forecast_track_streams()
+3. Generate future forecasts with forecasting.forecast_track_streams()
 
 The central concept is the Monthly Listener Decay Rate (MLDR), which 
 quantifies how quickly a track's streams decrease over time.
@@ -36,7 +35,7 @@ Advanced Usage:
 For more fine-grained control, you can use the individual functions:
 
 ```python
-from utils.decay_models import remove_anomalies, fit_decay_curve, update_fitted_params, forecast_track_streams
+from utils.decay_models import remove_anomalies, fit_decay_curve, forecast_track_streams
 
 # Clean data and handle anomalies
 monthly_data = remove_anomalies(streaming_df)
@@ -58,8 +57,6 @@ from utils.decay_models.fitting import (
     prepare_decay_rate_fitting_data
 )
 from utils.decay_models.parameter_updates import (
-    update_fitted_params, 
-    get_decay_parameters,
     generate_track_decay_rates_by_month,
     create_decay_rate_dataframe,
     adjust_track_decay_rates,
@@ -78,8 +75,6 @@ __all__ = [
     'analyze_listener_decay',
     'fit_segment',
     'prepare_decay_rate_fitting_data',
-    'update_fitted_params',
-    'get_decay_parameters',
     'calculate_monthly_stream_projections',
     'generate_track_decay_rates_by_month',
     'create_decay_rate_dataframe',
