@@ -35,8 +35,7 @@ from utils.data_processing import (
     process_audience_geography,
     process_ownership_data,
     calculate_months_since_release,
-    calculate_monthly_stream_averages,
-    prepare_decay_rate_fitting_data
+    calculate_monthly_stream_averages
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -61,7 +60,8 @@ from utils.decay_models import (
     update_fitted_params,
     get_decay_parameters,
     calculate_monthly_stream_projections,
-    analyze_listener_decay
+    analyze_listener_decay,
+    prepare_decay_rate_fitting_data
 )
 
 # Import decay rate adjustment functions
