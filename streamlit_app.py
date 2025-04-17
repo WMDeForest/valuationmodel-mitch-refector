@@ -262,10 +262,6 @@ with tab1:
             # Get the first date from the data (not necessarily release date, just first tracking date)
             earliest_track_date = extract_earliest_date(df_track_data_unique, 'Date')
             
-            # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for later use with mechanical royalty data
-            earliest_track_datetime = datetime.strptime(earliest_track_date, "%d/%m/%Y")
-            earliest_track_date_formatted = earliest_track_datetime.strftime('%Y-%m')
-
             # Extract the latest (most recent) cumulative stream count
             total_historical_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
 
@@ -297,7 +293,6 @@ with tab1:
             # Create a single row DataFrame containing all key metrics for this track
             track_data = pd.DataFrame({
                 'track_name': [track_name_unique],
-                'earliest_track_date_formatted': [earliest_track_date_formatted],
                 'earliest_track_date': [earliest_track_date],  # Keep original format for any other uses
                 'track_streams_last_30days': [track_streams_last_30days],
                 'track_streams_last_90days': [track_streams_last_90days],
@@ -424,14 +419,18 @@ with tab1:
                 # Determine the end date for royalty rate calculations
                 # For older tracks, use the valuation cutoff date
                 # For newer tracks, use the latest available data
-                if song_data['earliest_track_date_formatted'] >= HISTORICAL_VALUATION_CUTOFF:
+                
+                # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for mechanical royalty rate comparison
+                earliest_track_date_formatted = datetime.strptime(song_data['earliest_track_date'], "%d/%m/%Y").strftime('%Y-%m')
+                
+                if earliest_track_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
                     royalty_calculation_end_date = mechanical_royalty_rates_df['Date'].max()
                 else:
                     royalty_calculation_end_date = HISTORICAL_VALUATION_CUTOFF
                     
                 # Filter mechanical royalty data for relevant date range
                 # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
-                mask = (mechanical_royalty_rates_df['Date'] >= song_data['earliest_track_date_formatted']) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
+                mask = (mechanical_royalty_rates_df['Date'] >= earliest_track_date_formatted) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
                 
                 # Calculate historical royalty value using our dedicated function
                 historical_royalty_value_time_adjusted = calculate_historical_royalty_revenue(
