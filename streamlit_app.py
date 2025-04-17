@@ -108,6 +108,152 @@ from utils.geographic_analysis import (
 from utils.fraud_detection import detect_streaming_fraud
 
 # ===== MODELING FUNCTIONS =====
+# Define track stream forecasting function
+def generate_track_streams_forecast(
+    track_data_df,
+    track_name,
+    mldr,
+    fitted_params_df,
+    stream_influence_factor,
+    sp_range,
+    sp_reach,
+    track_lifecycle_segment_boundaries,
+    forecast_periods
+):
+    """
+    Generate stream forecasts for a single track based on its historical streaming data.
+    
+    Parameters:
+    -----------
+    track_data_df : pandas.DataFrame
+        DataFrame containing the track's streaming data with 'Date' and 'CumulativeStreams' columns
+    track_name : str
+        Name of the track
+    mldr : float
+        Monthly Listener Decay Rate from artist-level analysis
+    fitted_params_df : pandas.DataFrame
+        DataFrame containing pre-fitted decay parameters
+    stream_influence_factor : float
+        Factor to adjust stream projections
+    sp_range : list
+        Range list for stream projections
+    sp_reach : list
+        Reach data for stream projections
+    track_lifecycle_segment_boundaries : dict
+        Dictionary defining track lifecycle segment boundaries
+    forecast_periods : int
+        Number of periods to forecast
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing the track forecast data and intermediate calculated values
+    """
+    result = {}
+    
+    # 1. Extract base metrics from the track data
+    earliest_track_date = extract_earliest_date(track_data_df, 'Date')
+    total_historical_track_streams = track_data_df['CumulativeStreams'].iloc[-1]
+    
+    # 2. Calculate period-specific stream counts
+    track_streams_last_30days = calculate_period_streams(track_data_df, 'CumulativeStreams', 30)
+    track_streams_last_90days = calculate_period_streams(track_data_df, 'CumulativeStreams', 90)
+    track_streams_last_365days = calculate_period_streams(track_data_df, 'CumulativeStreams', 365)
+    
+    # 3. Calculate time-based metrics
+    months_since_release_total = calculate_months_since_release(earliest_track_date)
+    
+    # 4. Calculate monthly averages for different time periods
+    avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
+        track_streams_last_30days,
+        track_streams_last_90days,
+        track_streams_last_365days,
+        months_since_release_total
+    )
+    
+    # 5. Prepare arrays for decay rate fitting
+    months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
+        months_since_release_total,
+        avg_monthly_streams_months_4to12,
+        avg_monthly_streams_months_2to3,
+        track_streams_last_30days
+    )
+    
+    # 6. Get decay parameters
+    decay_rates_df, updated_fitted_params = get_decay_parameters(
+        fitted_params_df, 
+        stream_influence_factor, 
+        sp_range, 
+        sp_reach
+    )
+    
+    # 7. Fit decay model to stream data
+    params = fit_segment(months_since_release, monthly_averages)
+    S0, track_decay_k = params
+    
+    # 8. Generate track-specific decay rates for forecast
+    track_monthly_decay_rates = generate_track_decay_rates_by_month(
+        decay_rates_df, 
+        track_lifecycle_segment_boundaries
+    )
+    
+    # 9. Determine observed time range
+    track_data_start_month = min(months_since_release)
+    track_data_end_month = max(months_since_release)
+    
+    # 10. Create structured decay rate dataframe
+    track_decay_rate_df = create_decay_rate_dataframe(
+        track_months_since_release=list(range(1, 501)),  # Forecast for 500 months
+        track_monthly_decay_rates=track_monthly_decay_rates,
+        mldr=mldr,
+        track_data_start_month=track_data_start_month,
+        track_data_end_month=track_data_end_month
+    )
+    
+    # 11. Adjust decay rates based on observed data
+    adjusted_track_decay_df, track_adjustment_info = adjust_track_decay_rates(
+        track_decay_rate_df, 
+        track_decay_k=track_decay_k
+    )
+    
+    # 12. Segment decay rates by time period
+    segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(
+        adjusted_track_decay_df, 
+        track_lifecycle_segment_boundaries
+    )
+    
+    # 13. Generate stream forecasts
+    track_streams_forecast = forecast_track_streams(
+        segmented_track_decay_rates_df, 
+        track_streams_last_30days, 
+        months_since_release_total, 
+        forecast_periods
+    )
+    
+    # 14. Convert forecasts to DataFrame
+    track_streams_forecast_df = pd.DataFrame(track_streams_forecast)
+    
+    # Store all key metrics and results
+    result = {
+        'track_name': track_name,
+        'earliest_track_date': earliest_track_date,
+        'total_historical_track_streams': total_historical_track_streams,
+        'track_streams_last_30days': track_streams_last_30days,
+        'track_streams_last_90days': track_streams_last_90days,
+        'track_streams_last_365days': track_streams_last_365days,
+        'months_since_release_total': months_since_release_total,
+        'months_since_release': months_since_release,
+        'monthly_averages': monthly_averages,
+        'track_decay_k': track_decay_k,
+        'forecast_df': track_streams_forecast_df,
+        'decay_parameters': {
+            'S0': S0,
+            'track_decay_k': track_decay_k,
+            'track_adjustment_info': track_adjustment_info
+        }
+    }
+    
+    return result
 
 # ===== DATA LOADING - GLOBAL DATASETS =====
 # Load country population data for analyzing geographic streaming patterns
@@ -269,6 +415,7 @@ with tab1:
         export_track_streams_forecast = pd.DataFrame()
         track_valuation_summaries = []
         track_catalog_df = pd.DataFrame() #DataFrame that will store data for all tracks (our catalog)
+        track_forecast_results = {}  # Dictionary to store all forecast results
         
         # Process each selected song's data file using our mapping
         for selected_song in selected_songs:
@@ -282,55 +429,42 @@ with tab1:
                 # Make column names more descriptive - 'Value' becomes 'CumulativeStreams'
                 df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
 
-                # Get the first date from the data (not necessarily release date, just first tracking date)
-                earliest_track_date = extract_earliest_date(df_track_data_unique, 'Date')
-                
-                # Extract the latest (most recent) cumulative stream count
-                total_historical_track_streams = df_track_data_unique['CumulativeStreams'].iloc[-1]
-
-                # Calculate period-specific stream counts using our utility function
-                # These represent streams in the last 30/90/365 days
-                track_streams_last_30days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 30)
-                track_streams_last_90days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 90)
-                track_streams_last_365days = calculate_period_streams(df_track_data_unique, 'CumulativeStreams', 365)
-                
-                # Pre-calculate time-based metrics to avoid recalculating after Run All button
-                months_since_release_total = calculate_months_since_release(earliest_track_date)
-                
-                # Calculate monthly averages for different time periods
-                avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
-                    track_streams_last_30days,
-                    track_streams_last_90days,
-                    track_streams_last_365days,
-                    months_since_release_total
+                # Generate track stream forecast using our new component
+                forecast_result = generate_track_streams_forecast(
+                    track_data_df=df_track_data_unique,
+                    track_name=track_name_unique,
+                    mldr=mldr,  # From artist-level analysis done earlier
+                    fitted_params_df=fitted_params_df,
+                    stream_influence_factor=DEFAULT_STREAM_INFLUENCE_FACTOR,
+                    sp_range=sp_range,
+                    sp_reach=SP_REACH,
+                    track_lifecycle_segment_boundaries=track_lifecycle_segment_boundaries,
+                    forecast_periods=DEFAULT_FORECAST_PERIODS
                 )
                 
-                # Prepare arrays for decay rate fitting
-                months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
-                    months_since_release_total,
-                    avg_monthly_streams_months_4to12,
-                    avg_monthly_streams_months_2to3,
-                    track_streams_last_30days
-                )
+                # Store the forecast results
+                track_forecast_results[track_name_unique] = forecast_result
                 
-                # Create a single row DataFrame containing all key metrics for this track
+                # Create a single row DataFrame for this track's metrics (for compatibility with existing code)
                 track_data = pd.DataFrame({
                     'track_name': [track_name_unique],
-                    'earliest_track_date': [earliest_track_date],  # Keep original format for any other uses
-                    'track_streams_last_30days': [track_streams_last_30days],
-                    'track_streams_last_90days': [track_streams_last_90days],
-                    'track_streams_last_365days': [track_streams_last_365days],
-                    'total_historical_track_streams': [total_historical_track_streams],
-                    'months_since_release_total': [months_since_release_total],
-                    'avg_monthly_streams_months_4to12': [avg_monthly_streams_months_4to12],
-                    'avg_monthly_streams_months_2to3': [avg_monthly_streams_months_2to3],
-                    'months_since_release': [months_since_release.tolist() if hasattr(months_since_release, 'tolist') else months_since_release],
-                    'monthly_averages': [monthly_averages.tolist() if hasattr(monthly_averages, 'tolist') else monthly_averages]
+                    'earliest_track_date': [forecast_result['earliest_track_date']],
+                    'track_streams_last_30days': [forecast_result['track_streams_last_30days']],
+                    'track_streams_last_90days': [forecast_result['track_streams_last_90days']],
+                    'track_streams_last_365days': [forecast_result['track_streams_last_365days']],
+                    'total_historical_track_streams': [forecast_result['total_historical_track_streams']],
+                    'months_since_release_total': [forecast_result['months_since_release_total']],
+                    'months_since_release': [forecast_result['months_since_release'].tolist() if hasattr(forecast_result['months_since_release'], 'tolist') else forecast_result['months_since_release']],
+                    'monthly_averages': [forecast_result['monthly_averages'].tolist() if hasattr(forecast_result['monthly_averages'], 'tolist') else forecast_result['monthly_averages']]
                 })
                 
-                # Add this track's data to our catalog of all tracks
-                # Each time through the loop, we add one more row to the catalog
+                # Add to catalog DataFrame for compatibility with existing code
                 track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
+                
+                # Add forecast data to export DataFrame
+                forecast_df_copy = forecast_result['forecast_df'].copy()
+                forecast_df_copy['track_name'] = track_name_unique
+                export_track_streams_forecast = pd.concat([export_track_streams_forecast, forecast_df_copy], ignore_index=True)
 
         # ===== AUDIENCE GEOGRAPHY PROCESSING =====
         # Process the audience geography data to determine geographic distribution of listeners
@@ -346,91 +480,26 @@ with tab1:
 
         # Process each selected song
         for selected_song in selected_songs:
-            # ===== 1. EXTRACT SONG DATA =====
-            if selected_song not in track_catalog_df['track_name'].values:
+            # Check if we have forecast data for this song
+            if selected_song not in track_forecast_results:
                 st.error(f"Data for {selected_song} not processed properly. Skipping...")
                 continue
                 
-            song_data = track_catalog_df[track_catalog_df['track_name'] == selected_song].iloc[0]
-            track_streams_last_365days = song_data['track_streams_last_365days']
-            track_streams_last_90days = song_data['track_streams_last_90days']
-            track_streams_last_30days = song_data['track_streams_last_30days']
-            total_historical_track_streams = song_data['total_historical_track_streams']
+            # Get forecast results
+            forecast_result = track_forecast_results[selected_song]
+            track_streams_forecast_df = forecast_result['forecast_df']
             
-            # Get both date formats - we need raw format for months calculation
-            earliest_track_date = song_data['earliest_track_date']  # Original DD/MM/YYYY format
-            
-            # Pre-calculate months since release using original date format
-            months_since_release_total = calculate_months_since_release(earliest_track_date)
-            
-            # ===== 2. UPDATE DECAY PARAMETERS =====
-            # Get both DataFrame and dictionary formats of decay parameters
-            decay_rates_df, updated_fitted_params = get_decay_parameters(
-                fitted_params_df, 
-                DEFAULT_STREAM_INFLUENCE_FACTOR, 
-                sp_range, 
-                SP_REACH
-            )
-            
-            # ===== 3. RETRIEVE DECAY FITTING DATA FOR MODELING =====
-            # Get arrays for decay curve fitting (only the data needed immediately)
-            track_months_since_release = song_data['months_since_release']
-            monthly_averages = song_data['monthly_averages']
-            
-            # ===== 4. FIT DECAY MODEL TO STREAM DATA =====
-            params = fit_segment(track_months_since_release, monthly_averages)
-            S0, track_decay_k = params
-            
-            # Generate track-specific decay rates for all forecast months 
-            # These rates model how this individual track's streams will decline over time,
-            # distinct from the artist-level decay rates calculated in the previous section
-            track_monthly_decay_rates = generate_track_decay_rates_by_month(decay_rates_df, track_lifecycle_segment_boundaries)
-            
-            # Determine the observed time range from the track's streaming data
-            track_data_start_month = min(track_months_since_release)
-            track_data_end_month = max(track_months_since_release)
-            
-            # Create a structured DataFrame that combines model-derived decay rates with observed data
-            # This DataFrame is critical for adjusting theoretical decay curves with actual observed patterns
-            track_decay_rate_df = create_decay_rate_dataframe(
-                track_months_since_release=list(range(1, 501)),  # Forecast for 500 months (about 41.7 years) of track lifetime
-                track_monthly_decay_rates=track_monthly_decay_rates,  # Using our track-specific decay rates
-                mldr=mldr,  # Monthly Listener Decay Rate from artist-level analysis
-                track_data_start_month=track_data_start_month,  # First month we have actual track streaming data
-                track_data_end_month=track_data_end_month       # Last month we have actual track streaming data
-            )
-            
-            # ===== 5. ADJUST TRACK DECAY RATES BASED ON OBSERVED DATA =====
-            # Apply a two-stage adjustment using observed artist and track data
-            adjusted_track_decay_df, track_adjustment_info = adjust_track_decay_rates(
-                track_decay_rate_df, 
-                track_decay_k=track_decay_k  # Track-specific fitted decay parameter
-            )
-            
-            # ===== 6. SEGMENT DECAY RATES BY TIME PERIOD =====
-            # Calculate average decay rates for each segment
-            segmented_track_decay_rates_df = calculate_track_decay_rates_by_segment(adjusted_track_decay_df, track_lifecycle_segment_boundaries)
-
-            # ===== 7. GENERATE STREAM FORECASTS =====
-            track_streams_forecast = forecast_track_streams(segmented_track_decay_rates_df, track_streams_last_30days, song_data['months_since_release_total'], DEFAULT_FORECAST_PERIODS)
-
-            # Convert forecasts to a DataFrame - the column contains streapredictions for each future month
-            track_streams_forecast_df = pd.DataFrame(track_streams_forecast)
-            track_streams_forecast_df2 = track_streams_forecast_df.copy()  # Create a copy for export
-            track_streams_forecast_df2['track_name'] = selected_song #add track name to the dataframe for export
-            export_track_streams_forecast = pd.concat([export_track_streams_forecast, track_streams_forecast_df2], ignore_index=True)
-            
-            # Calculate the total predicted streams for the forecast period
+            # Calculate total predicted streams for valuation
             track_valuation_months = DEFAULT_FORECAST_YEARS * 12
             total_track_streams_forecast = track_streams_forecast_df.loc[:track_valuation_months, 'predicted_streams_for_month'].sum()
-
+            
             # ===== 8. CALCULATE HISTORICAL VALUE =====
             # Determine the end date for royalty rate calculations
             # For older tracks, use the valuation cutoff date
             # For newer tracks, use the latest available data
             
             # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for mechanical royalty rate comparison
-            earliest_track_date_formatted = datetime.strptime(song_data['earliest_track_date'], "%d/%m/%Y").strftime('%Y-%m')
+            earliest_track_date_formatted = datetime.strptime(forecast_result['earliest_track_date'], "%d/%m/%Y").strftime('%Y-%m')
             
             if earliest_track_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
                 royalty_calculation_end_date = mechanical_royalty_rates_df['Date'].max()
@@ -443,7 +512,7 @@ with tab1:
             
             # Calculate historical royalty value using our dedicated function
             historical_royalty_value_time_adjusted = calculate_historical_royalty_revenue(
-                total_historical_track_streams=total_historical_track_streams,
+                total_historical_track_streams=forecast_result['total_historical_track_streams'],
                 mechanical_royalty_rates_df=mechanical_royalty_rates_df,
                 date_range_mask=mask,
                 listener_percentage_usa=listener_percentage_usa,
@@ -471,7 +540,7 @@ with tab1:
             # ===== 12. STORE FORECAST SUMMARY =====
             track_valuation_summaries.append({
                 'track_name': selected_song,
-                'total_historical_track_streams': total_historical_track_streams,
+                'total_historical_track_streams': forecast_result['total_historical_track_streams'],
                 'total_track_streams_forecast': total_track_streams_forecast,
                 'historical_royalty_value_time_adjusted': historical_royalty_value_time_adjusted,
                 'undiscounted_future_royalty_value': undiscounted_future_royalty_value,
