@@ -33,7 +33,8 @@ from utils.data_processing import (
     extract_earliest_date,
     calculate_period_streams,
     calculate_months_since_release,
-    calculate_monthly_stream_averages
+    calculate_monthly_stream_averages,
+    extract_track_metrics
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -60,7 +61,6 @@ from utils.decay_models import (
 
 # Import track forecasting functions (now including parameter update functions)
 from utils.track_stream_forecasting import (
-    extract_track_metrics, 
     build_complete_track_forecast, 
     get_decay_parameters, 
     update_fitted_params, 

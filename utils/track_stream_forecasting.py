@@ -14,7 +14,8 @@ from utils.data_processing import (
     extract_earliest_date,
     calculate_period_streams,
     calculate_months_since_release,
-    calculate_monthly_stream_averages
+    calculate_monthly_stream_averages,
+    extract_track_metrics
 )
 from utils.decay_models.fitting import prepare_decay_rate_fitting_data
 from utils.decay_models.core import piecewise_exp_decay
@@ -471,67 +472,6 @@ def get_decay_parameters(fitted_params_df, stream_influence_factor, sp_range, sp
         return updated_params_df, updated_params_dict
     
     return None, None
-
-def extract_track_metrics(track_data_df, track_name=None):
-    """
-    Extract basic track metrics from streaming data.
-    
-    Parameters:
-    -----------
-    track_data_df : pandas.DataFrame
-        DataFrame containing the track's streaming data with 'Date' and 'CumulativeStreams' columns
-    track_name : str, optional
-        Name of the track
-        
-    Returns:
-    --------
-    dict
-        Dictionary containing basic track metrics
-    """
-    # Extract base metrics from the track data
-    earliest_track_date = extract_earliest_date(track_data_df, 'Date')
-    total_historical_track_streams = track_data_df['CumulativeStreams'].iloc[-1]
-    
-    # Calculate period-specific stream counts
-    track_streams_last_30days = calculate_period_streams(track_data_df, 'CumulativeStreams', 30)
-    track_streams_last_90days = calculate_period_streams(track_data_df, 'CumulativeStreams', 90)
-    track_streams_last_365days = calculate_period_streams(track_data_df, 'CumulativeStreams', 365)
-    
-    # Calculate time-based metrics
-    months_since_release_total = calculate_months_since_release(earliest_track_date)
-    
-    # Calculate monthly averages for different time periods
-    avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
-        track_streams_last_30days,
-        track_streams_last_90days,
-        track_streams_last_365days,
-        months_since_release_total
-    )
-    
-    # Prepare arrays for decay rate fitting
-    months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
-        months_since_release_total,
-        avg_monthly_streams_months_4to12,
-        avg_monthly_streams_months_2to3,
-        track_streams_last_30days
-    )
-    
-    # Return a dictionary with all calculated metrics
-    metrics = {
-        'track_name': track_name,
-        'earliest_track_date': earliest_track_date,
-        'total_historical_track_streams': total_historical_track_streams,
-        'track_streams_last_30days': track_streams_last_30days,
-        'track_streams_last_90days': track_streams_last_90days,
-        'track_streams_last_365days': track_streams_last_365days,
-        'months_since_release_total': months_since_release_total,
-        'avg_monthly_streams_months_4to12': avg_monthly_streams_months_4to12,
-        'avg_monthly_streams_months_2to3': avg_monthly_streams_months_2to3,
-        'months_since_release': months_since_release,
-        'monthly_averages': monthly_averages
-    }
-    
-    return metrics
 
 def build_complete_track_forecast(
     track_metrics,

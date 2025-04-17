@@ -241,4 +241,89 @@ def remove_anomalies(data):
             # Replace anomalous value with average of adjacent months
             monthly_data.loc[i, '4_Week_MA'] = (monthly_data.loc[i - 1, '4_Week_MA'] + monthly_data.loc[i + 1, '4_Week_MA']) / 2
 
-    return monthly_data 
+    return monthly_data
+
+def calculate_total_historical_streams(df, cumulative_column='CumulativeStreams'):
+    """
+    Calculate the total historical streams for a track from cumulative data.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame containing the track's streaming data
+    cumulative_column : str, optional
+        Name of the column containing cumulative stream values
+        
+    Returns:
+    --------
+    int/float:
+        Total historical streams (the latest/highest cumulative value)
+    """
+    if len(df) == 0:
+        return 0
+        
+    return df[cumulative_column].iloc[-1]
+
+def extract_track_metrics(track_data_df, track_name=None):
+    """
+    Extract basic track metrics from streaming data.
+    
+    Parameters:
+    -----------
+    track_data_df : pandas.DataFrame
+        DataFrame containing the track's streaming data with 'Date' and 'CumulativeStreams' columns
+    track_name : str, optional
+        Name of the track
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing basic track metrics
+    """
+    # Import here to avoid circular imports
+    from utils.decay_models.fitting import prepare_decay_rate_fitting_data
+    
+    # Extract base metrics from the track data
+    earliest_track_date = extract_earliest_date(track_data_df, 'Date')
+    total_historical_track_streams = calculate_total_historical_streams(track_data_df, 'CumulativeStreams')
+    
+    # Calculate period-specific stream counts
+    track_streams_last_30days = calculate_period_streams(track_data_df, 'CumulativeStreams', 30)
+    track_streams_last_90days = calculate_period_streams(track_data_df, 'CumulativeStreams', 90)
+    track_streams_last_365days = calculate_period_streams(track_data_df, 'CumulativeStreams', 365)
+    
+    # Calculate time-based metrics
+    months_since_release_total = calculate_months_since_release(earliest_track_date)
+    
+    # Calculate monthly averages for different time periods
+    avg_monthly_streams_months_4to12, avg_monthly_streams_months_2to3 = calculate_monthly_stream_averages(
+        track_streams_last_30days,
+        track_streams_last_90days,
+        track_streams_last_365days,
+        months_since_release_total
+    )
+    
+    # Prepare arrays for decay rate fitting
+    months_since_release, monthly_averages = prepare_decay_rate_fitting_data(
+        months_since_release_total,
+        avg_monthly_streams_months_4to12,
+        avg_monthly_streams_months_2to3,
+        track_streams_last_30days
+    )
+    
+    # Return a dictionary with all calculated metrics
+    metrics = {
+        'track_name': track_name,
+        'earliest_track_date': earliest_track_date,
+        'total_historical_track_streams': total_historical_track_streams,
+        'track_streams_last_30days': track_streams_last_30days,
+        'track_streams_last_90days': track_streams_last_90days,
+        'track_streams_last_365days': track_streams_last_365days,
+        'months_since_release_total': months_since_release_total,
+        'avg_monthly_streams_months_4to12': avg_monthly_streams_months_4to12,
+        'avg_monthly_streams_months_2to3': avg_monthly_streams_months_2to3,
+        'months_since_release': months_since_release,
+        'monthly_averages': monthly_averages
+    }
+    
+    return metrics 
