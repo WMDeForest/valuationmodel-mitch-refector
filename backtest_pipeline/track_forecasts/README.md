@@ -80,5 +80,5 @@ This will:
 
 - The script uses the same forecasting algorithm as the Streamlit app, ensuring consistency
 - Artist MLDR values are critical for accurate forecasting - tracks without an artist MLDR will be skipped
-- The forecasting period is set to `DEFAULT_FORECAST_PERIODS` (typically 400 months)
+- The forecasting period is set to `DEFAULT_TRACK_STREAMS_FORECAST_PERIOD` (typically 400 months)
 - Track decay rates are segmented based on `track_lifecycle_segment_boundaries` from the decay_rates module

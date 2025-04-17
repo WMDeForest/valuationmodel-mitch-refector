@@ -45,8 +45,8 @@ from utils.decay_rates import (
     fitted_params_df,
     track_lifecycle_segment_boundaries,
     DEFAULT_STREAM_INFLUENCE_FACTOR,
-    DEFAULT_FORECAST_PERIODS,
-    DEFAULT_FORECAST_YEARS
+    DEFAULT_TRACK_STREAMS_FORECAST_PERIOD,
+    DEFAULT_VALUATION_CALCULATION_YEARS
 )
 
 # Import decay model functions from the new modules
@@ -300,7 +300,7 @@ with tab1:
                     sp_range=sp_range,
                     sp_reach=SP_REACH,
                     track_lifecycle_segment_boundaries=track_lifecycle_segment_boundaries,
-                    forecast_periods=DEFAULT_FORECAST_PERIODS
+                    forecast_periods=DEFAULT_TRACK_STREAMS_FORECAST_PERIOD
                 )
                 
                 # Combine track metrics and forecast results for compatibility with existing code
@@ -354,7 +354,7 @@ with tab1:
             track_streams_forecast_df = forecast_result['forecast_df']
             
             # Calculate total predicted streams for valuation
-            track_valuation_months = DEFAULT_FORECAST_YEARS * 12
+            track_valuation_months = DEFAULT_VALUATION_CALCULATION_YEARS * 12
             total_track_streams_forecast = track_streams_forecast_df.loc[:track_valuation_months, 'predicted_streams_for_month'].sum()
             
             # ===== 8. CALCULATE HISTORICAL VALUE =====
