@@ -481,8 +481,7 @@ def build_complete_track_forecast(
     sp_range,
     sp_reach,
     track_lifecycle_segment_boundaries,
-    forecast_periods
-):
+    forecast_periods):
     """
     Build a complete track forecast by coordinating the end-to-end forecasting process.
     
