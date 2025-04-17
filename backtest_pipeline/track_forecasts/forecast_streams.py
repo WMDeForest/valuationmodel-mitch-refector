@@ -45,6 +45,9 @@ from utils.track_stream_forecasting import (
 from utils.data_processing import (
     calculate_monthly_stream_averages
 )
+from utils.decay_rates.fitted_params import fitted_params_df
+from utils.decay_rates.sp_reach import SP_REACH
+from utils.decay_rates.volume_ranges import sp_range
 
 # Always register the cleanup function to ensure proper shutdown
 atexit.register(close_all_connections)
@@ -151,33 +154,12 @@ def get_default_decay_parameters():
     Returns:
         tuple: (fitted_params_df, sp_range, sp_reach) with default values
     """
-    # Create default fitted parameters DataFrame with decay rates for each segment
-    segments = list(range(1, len(track_lifecycle_segment_boundaries)))
-    # These are placeholder decay rates, should be adjusted based on actual data analysis
-    decay_rates = [0.15, 0.08, 0.04, 0.02, 0.01]  # Higher rates for early segments, lower for later
+    # Use parameters imported from utils.decay_rates modules
+    # - fitted_params_df from fitted_params.py
+    # - sp_range from volume_ranges.py
+    # - SP_REACH from sp_reach.py
     
-    fitted_params_df = pd.DataFrame({
-        'segment': segments,
-        'k': decay_rates
-    })
-    
-    # Create default stream influence factor ranges
-    sp_range = pd.DataFrame({
-        'RangeStart': [0, 100000, 500000, 1000000, 5000000],
-        'RangeEnd': [100000, 500000, 1000000, 5000000, float('inf')],
-        'Column 1': ['low', 'medium_low', 'medium', 'medium_high', 'high']
-    })
-    
-    # Create default stream influence adjustment factors
-    sp_reach = pd.DataFrame({
-        'low': [0.18, 0.10, 0.05, 0.03, 0.015],
-        'medium_low': [0.17, 0.09, 0.045, 0.025, 0.012],
-        'medium': [0.16, 0.08, 0.04, 0.02, 0.01],
-        'medium_high': [0.15, 0.07, 0.035, 0.018, 0.009],
-        'high': [0.14, 0.06, 0.03, 0.015, 0.008]
-    })
-    
-    return fitted_params_df, sp_range, sp_reach
+    return fitted_params_df, sp_range, SP_REACH
 
 def generate_track_forecasts(cm_track_id, cm_artist_id, mldr=None):
     """
