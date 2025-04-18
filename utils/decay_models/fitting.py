@@ -1,60 +1,17 @@
 """
-Model fitting functions for decay rate estimation.
+Utilities for fitting decay curves to streaming data.
 
-This module contains functions for fitting exponential decay models to streaming data
-and estimating decay rates. These functions serve as the bridge between the raw data
-and the forecasting process, extracting the key parameters that drive predictions.
+This module provides functions for analyzing listener decay patterns by
+fitting mathematical curves to historical streaming data.
 """
+
 import numpy as np
 from scipy.optimize import curve_fit
-from utils.decay_models.core import piecewise_exp_decay, exponential_decay
+from utils.decay_models.core import exponential_decay
+from utils.track_stream_forecasting import piecewise_exp_decay
 from utils.data_processing import remove_anomalies
 from utils.data_processing import sample_data
 import pandas as pd
-
-def fit_segment(months_since_release, streams):
-    """
-    Fit exponential decay model to a segment of streaming data.
-    
-    This function uses SciPy's curve_fit to find the optimal parameters (S0, k)
-    that minimize the difference between the actual stream data and the predicted
-    values from the exponential decay function.
-    
-    The optimization is constrained to ensure both S0 (initial streams) and k (decay rate)
-    are positive values, which makes physical sense for music streaming patterns.
-    
-    Args:
-        months_since_release: Array or list of months since release (time values)
-        streams: Array or list of stream counts corresponding to each month
-        
-    Returns:
-        tuple: (S0, k) parameters for the fitted model where:
-               - S0 is the initial streams value
-               - k is the decay rate (higher = faster decay)
-    
-    Notes:
-        This function is typically used for fitting decay patterns in specific time segments
-        (e.g., months 1-3, 4-12, 13-36, etc.) as decay rates often change over a track's lifecycle.
-        The initial guess for optimization starts with the first data point as S0 and a small
-        decay rate (0.01) that is typical for music streaming.
-    """
-    # Convert inputs to numpy arrays if they're lists
-    if isinstance(months_since_release, list):
-        months_since_release = np.array(months_since_release)
-    if isinstance(streams, list):
-        streams = np.array(streams)
-        
-    # Set initial parameter guess based on first observed stream count and typical decay rate
-    initial_guess = [streams[0], 0.01]  
-    
-    # Set bounds to ensure physically meaningful parameters (positive values only)
-    bounds = ([0, 0], [np.inf, np.inf])  
-    
-    # Perform curve fitting to find optimal parameters
-    params, covariance = curve_fit(piecewise_exp_decay, months_since_release, streams, 
-                                   p0=initial_guess, bounds=bounds)
-    
-    return params
 
 def fit_decay_curve(monthly_data):
     """
@@ -102,7 +59,7 @@ def fit_decay_curve(monthly_data):
 
     # Extract the decay rate (b) - this is the MLDR (Music Listener Decay Rate)
     decay_rate = fitted_decay_parameters[1]
-    return decay_rate, fitted_decay_parameters 
+    return decay_rate, fitted_decay_parameters
 
 def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None, sample_rate=7):
     """
