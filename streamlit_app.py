@@ -111,6 +111,87 @@ from utils.ownership_data import process_ownership_data
 # Import fraud detection
 from utils.fraud_detection import detect_streaming_fraud
 
+# Define the parse_catalog_file function before it's used
+def parse_catalog_file(catalog_file):
+    """
+    Parse a catalog CSV file containing multiple tracks and split it into individual track dataframes.
+    
+    Args:
+        catalog_file: The uploaded CSV file containing multiple tracks
+        
+    Returns:
+        track_data_map: Dictionary mapping track names to their respective dataframes
+        track_names: List of unique track names found in the file
+    """
+    if catalog_file is None:
+        return {}, []
+    
+    # Read the catalog CSV file
+    catalog_df = pd.read_csv(catalog_file)
+    
+    # Check if we have the required columns for processing
+    required_columns = ['Date', 'Value']
+    track_identifier_column = None
+    
+    # First, try to find Track Name column (exact match)
+    if 'Track Name' in catalog_df.columns:
+        track_identifier_column = 'Track Name'
+    # Try with case insensitive match
+    elif any(col.lower() == 'track name' for col in catalog_df.columns):
+        for col in catalog_df.columns:
+            if col.lower() == 'track name':
+                track_identifier_column = col
+                break
+    # If no Track Name, try Track URL as alternative
+    elif 'Track URL' in catalog_df.columns:
+        track_identifier_column = 'Track URL'
+    elif any(col.lower() == 'track url' for col in catalog_df.columns):
+        for col in catalog_df.columns:
+            if col.lower() == 'track url':
+                track_identifier_column = col
+                break
+    
+    # If we can't find a way to identify tracks, return empty
+    if track_identifier_column is None:
+        st.error("The uploaded catalog file doesn't contain 'Track Name' or 'Track URL' columns.")
+        return {}, []
+    
+    # Check for required data columns
+    if 'Date' not in catalog_df.columns:
+        st.error("The uploaded catalog file doesn't contain a 'Date' column.")
+        return {}, []
+    
+    # Check for Value column (might be named differently)
+    value_column = None
+    if 'Value' in catalog_df.columns:
+        value_column = 'Value'
+    elif 'CumulativeStreams' in catalog_df.columns:
+        value_column = 'CumulativeStreams'
+    
+    if value_column is None:
+        st.error("The uploaded catalog file doesn't contain a 'Value' or 'CumulativeStreams' column.")
+        return {}, []
+    
+    # Extract unique track names/identifiers
+    track_identifiers = catalog_df[track_identifier_column].unique().tolist()
+    
+    # Create a dictionary to store dataframes for each track
+    track_data_map = {}
+    
+    # Split the data by track
+    for track_id in track_identifiers:
+        # Filter data for this track
+        track_df = catalog_df[catalog_df[track_identifier_column] == track_id].copy()
+        
+        # Make sure we have the expected columns (Date and Value)
+        if value_column != 'Value':
+            track_df = track_df.rename(columns={value_column: 'Value'})
+        
+        # Store in the mapping - use the track identifier as the key
+        track_data_map[track_id] = track_df
+    
+    return track_data_map, track_identifiers
+
 # ===== DATA LOADING - GLOBAL DATASETS =====
 # Load country population data for analyzing geographic streaming patterns
 # and detecting potential anomalies (e.g., streams exceeding realistic population penetration)
@@ -237,20 +318,19 @@ with tab1:
             
     # ===== TRACK DATA MANAGEMENT =====
     # 1. FILE UPLOADS SECTION
-    #uploaded_file = st.file_uploader("Tracklist", type=["csv"])
-    uploaded_files_unique = st.file_uploader("Monthly Track Spotify Streams", type=['csv'], accept_multiple_files=True)
+    # Updated to use a single catalog file instead of multiple individual track files
+    uploaded_catalog_file = st.file_uploader("Track Catalog CSV", type=["csv"], 
+                                             help="Upload a single CSV containing data for multiple tracks.")
+    
     uploaded_file_3 = st.file_uploader("Audience Geography", type=["csv"])
     uploaded_file_ownership = st.file_uploader("MLC Claimed and Song Ownership", type="csv")
 
-    # Create a mapping of files to track names and build list for UI display
-    track_names = []
-    track_files_map = {}
-    if uploaded_files_unique:
-        for file_unique in uploaded_files_unique:
-            # Extract track name from the filename (expected format: "Artist - TrackName.csv")
-            track_name_unique = file_unique.name.split(' - ')[1].strip()
-            track_names.append(track_name_unique)
-            track_files_map[track_name_unique] = file_unique
+    # Parse the catalog file to extract individual track data
+    track_data_map, track_names = parse_catalog_file(uploaded_catalog_file)
+    
+    # Display the number of tracks found in the catalog
+    if track_names:
+        st.success(f"Found {len(track_names)} tracks in the catalog file.")
 
     # ===== UI DISPLAY AND TRACK SELECTION =====
     # Set default selection to all tracks
@@ -273,62 +353,87 @@ with tab1:
         track_catalog_df = pd.DataFrame() #DataFrame that will store data for all tracks (our catalog)
         track_forecast_results = {}  # Dictionary to store all forecast results
         
-        # Process each selected song's data file using our mapping
+        # Verify we have at least one track selected and the necessary data
+        if not track_names:
+            st.error("No tracks found in the catalog file. Please upload a valid catalog file.")
+            st.stop()
+            
+        if not selected_songs:
+            st.error("No songs selected for analysis. Please select at least one song.")
+            st.stop()
+            
+        if uploaded_file is None:
+            st.warning("No artist monthly listeners data provided. This may impact decay rate calculations.")
+            mldr = 0.05  # Use a default value if no artist data
+        
+        # Process each selected song's data from our track_data_map
         for selected_song in selected_songs:
-            if selected_song in track_files_map:
-                file_unique = track_files_map[selected_song]
+            if selected_song in track_data_map:
+                # Get the dataframe for this track
+                df_track_data_unique = track_data_map[selected_song]
                 track_name_unique = selected_song  # We already have the track name
-                
-                # Read the track's streaming data from CSV
-                df_track_data_unique = pd.read_csv(file_unique)
                 
                 # Make column names more descriptive - 'Value' becomes 'CumulativeStreams'
                 df_track_data_unique = rename_columns(df_track_data_unique, {'Value': 'CumulativeStreams'})
+                
+                # Verify we have the required data
+                if 'Date' not in df_track_data_unique.columns or 'CumulativeStreams' not in df_track_data_unique.columns:
+                    st.error(f"Missing required columns for track '{selected_song}'. Skipping...")
+                    continue
 
                 # Step 1: Extract track metrics
-                track_metrics = extract_track_metrics(
-                    track_data_df=df_track_data_unique,
-                    track_name=track_name_unique
-                )
+                try:
+                    track_metrics = extract_track_metrics(
+                        track_data_df=df_track_data_unique,
+                        track_name=track_name_unique
+                    )
                 
-                # Step 2: Generate track stream forecast using the metrics
-                forecast_result = build_complete_track_forecast(
-                    track_metrics=track_metrics,
-                    mldr=mldr,  # From artist-level analysis done earlier
-                    fitted_params_df=fitted_params_df,
-                    stream_influence_factor=DEFAULT_STREAM_INFLUENCE_FACTOR,
-                    sp_range=sp_range,
-                    sp_reach=SP_REACH,
-                    track_lifecycle_segment_boundaries=track_lifecycle_segment_boundaries,
-                    forecast_periods=DEFAULT_TRACK_STREAMS_FORECAST_PERIOD
-                )
+                    # Step 2: Generate track stream forecast using the metrics
+                    forecast_result = build_complete_track_forecast(
+                        track_metrics=track_metrics,
+                        mldr=mldr,  # From artist-level analysis done earlier
+                        fitted_params_df=fitted_params_df,
+                        stream_influence_factor=DEFAULT_STREAM_INFLUENCE_FACTOR,
+                        sp_range=sp_range,
+                        sp_reach=SP_REACH,
+                        track_lifecycle_segment_boundaries=track_lifecycle_segment_boundaries,
+                        forecast_periods=DEFAULT_TRACK_STREAMS_FORECAST_PERIOD
+                    )
                 
-                # Combine track metrics and forecast results for compatibility with existing code
-                combined_result = {**track_metrics, **forecast_result}
+                    # Combine track metrics and forecast results for compatibility with existing code
+                    combined_result = {**track_metrics, **forecast_result}
                 
-                # Store the combined results
-                track_forecast_results[track_name_unique] = combined_result
+                    # Store the combined results
+                    track_forecast_results[track_name_unique] = combined_result
                 
-                # Create a single row DataFrame for this track's metrics (for compatibility with existing code)
-                track_data = pd.DataFrame({
-                    'track_name': [track_name_unique],
-                    'earliest_track_date': [track_metrics['earliest_track_date']],
-                    'track_streams_last_30days': [track_metrics['track_streams_last_30days']],
-                    'track_streams_last_90days': [track_metrics['track_streams_last_90days']],
-                    'track_streams_last_365days': [track_metrics['track_streams_last_365days']],
-                    'total_historical_track_streams': [track_metrics['total_historical_track_streams']],
-                    'months_since_release_total': [track_metrics['months_since_release_total']],
-                    'months_since_release': [track_metrics['months_since_release'].tolist() if hasattr(track_metrics['months_since_release'], 'tolist') else track_metrics['months_since_release']],
-                    'monthly_averages': [track_metrics['monthly_averages'].tolist() if hasattr(track_metrics['monthly_averages'], 'tolist') else track_metrics['monthly_averages']]
-                })
+                    # Create a single row DataFrame for this track's metrics (for compatibility with existing code)
+                    track_data = pd.DataFrame({
+                        'track_name': [track_name_unique],
+                        'earliest_track_date': [track_metrics['earliest_track_date']],
+                        'track_streams_last_30days': [track_metrics['track_streams_last_30days']],
+                        'track_streams_last_90days': [track_metrics['track_streams_last_90days']],
+                        'track_streams_last_365days': [track_metrics['track_streams_last_365days']],
+                        'total_historical_track_streams': [track_metrics['total_historical_track_streams']],
+                        'months_since_release_total': [track_metrics['months_since_release_total']],
+                        'months_since_release': [track_metrics['months_since_release'].tolist() if hasattr(track_metrics['months_since_release'], 'tolist') else track_metrics['months_since_release']],
+                        'monthly_averages': [track_metrics['monthly_averages'].tolist() if hasattr(track_metrics['monthly_averages'], 'tolist') else track_metrics['monthly_averages']]
+                    })
                 
-                # Add to catalog DataFrame for compatibility with existing code
-                track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
+                    # Add to catalog DataFrame for compatibility with existing code
+                    track_catalog_df = pd.concat([track_catalog_df, track_data], ignore_index=True)
                 
-                # Add forecast data to export DataFrame
-                forecast_df_copy = forecast_result['forecast_df'].copy()
-                forecast_df_copy['track_name'] = track_name_unique
-                export_track_streams_forecast = pd.concat([export_track_streams_forecast, forecast_df_copy], ignore_index=True)
+                    # Add forecast data to export DataFrame
+                    forecast_df_copy = forecast_result['forecast_df'].copy()
+                    forecast_df_copy['track_name'] = track_name_unique
+                    export_track_streams_forecast = pd.concat([export_track_streams_forecast, forecast_df_copy], ignore_index=True)
+                    
+                    st.success(f"Successfully processed track: {selected_song}")
+                
+                except Exception as e:
+                    st.error(f"Error processing track '{selected_song}': {str(e)}")
+                    continue
+            else:
+                st.error(f"Data for track '{selected_song}' not found in the catalog. Skipping...")
 
         # ===== AUDIENCE GEOGRAPHY PROCESSING =====
         # Process the audience geography data to determine geographic distribution of listeners
