@@ -19,7 +19,8 @@ from utils.data_processing import (
     calculate_period_streams,
     calculate_months_since_release,
     calculate_monthly_stream_averages,
-    extract_track_metrics
+    extract_track_metrics,
+    parse_catalog_file
 )
 from utils.decay_rates import (
     ranges_sp,
@@ -95,87 +96,6 @@ from utils.ownership_data import process_ownership_data
 
 # Import fraud detection
 from utils.fraud_detection import detect_streaming_fraud
-
-# Define the parse_catalog_file function
-def parse_catalog_file(catalog_file):
-    """
-    Parse a catalog CSV file containing multiple tracks and split it into individual track dataframes.
-    
-    Args:
-        catalog_file: The uploaded CSV file containing multiple tracks
-        
-    Returns:
-        track_data_map: Dictionary mapping track names to their respective dataframes
-        track_names: List of unique track names found in the file
-    """
-    if catalog_file is None:
-        return {}, []
-    
-    # Read the catalog CSV file
-    catalog_df = pd.read_csv(catalog_file)
-    
-    # Check if we have the required columns for processing
-    required_columns = ['Date', 'Value']
-    track_identifier_column = None
-    
-    # First, try to find Track Name column (exact match)
-    if 'Track Name' in catalog_df.columns:
-        track_identifier_column = 'Track Name'
-    # Try with case insensitive match
-    elif any(col.lower() == 'track name' for col in catalog_df.columns):
-        for col in catalog_df.columns:
-            if col.lower() == 'track name':
-                track_identifier_column = col
-                break
-    # If no Track Name, try Track URL as alternative
-    elif 'Track URL' in catalog_df.columns:
-        track_identifier_column = 'Track URL'
-    elif any(col.lower() == 'track url' for col in catalog_df.columns):
-        for col in catalog_df.columns:
-            if col.lower() == 'track url':
-                track_identifier_column = col
-                break
-    
-    # If we can't find a way to identify tracks, return empty
-    if track_identifier_column is None:
-        st.error("The uploaded catalog file doesn't contain 'Track Name' or 'Track URL' columns.")
-        return {}, []
-    
-    # Check for required data columns
-    if 'Date' not in catalog_df.columns:
-        st.error("The uploaded catalog file doesn't contain a 'Date' column.")
-        return {}, []
-    
-    # Check for Value column (might be named differently)
-    value_column = None
-    if 'Value' in catalog_df.columns:
-        value_column = 'Value'
-    elif 'CumulativeStreams' in catalog_df.columns:
-        value_column = 'CumulativeStreams'
-    
-    if value_column is None:
-        st.error("The uploaded catalog file doesn't contain a 'Value' or 'CumulativeStreams' column.")
-        return {}, []
-    
-    # Extract unique track names/identifiers
-    track_identifiers = catalog_df[track_identifier_column].unique().tolist()
-    
-    # Create a dictionary to store dataframes for each track
-    track_data_map = {}
-    
-    # Split the data by track
-    for track_id in track_identifiers:
-        # Filter data for this track
-        track_df = catalog_df[catalog_df[track_identifier_column] == track_id].copy()
-        
-        # Make sure we have the expected columns (Date and Value)
-        if value_column != 'Value':
-            track_df = track_df.rename(columns={value_column: 'Value'})
-        
-        # Store in the mapping - use the track identifier as the key
-        track_data_map[track_id] = track_df
-    
-    return track_data_map, track_identifiers
 
 def render_file_uploader_tab():
     """Render the File Uploader tab with all the necessary UI components and processing"""
@@ -288,7 +208,11 @@ def render_file_uploader_tab():
     uploaded_file_ownership = st.file_uploader("MLC Claimed and Song Ownership", type="csv")
 
     # Parse the catalog file to extract individual track data
-    track_data_map, track_names = parse_catalog_file(uploaded_catalog_file)
+    track_data_map, track_names, parse_errors = parse_catalog_file(uploaded_catalog_file)
+    
+    # Display any parsing errors
+    for error in parse_errors:
+        st.error(error)
     
     # Display the number of tracks found in the catalog
     if track_names:
