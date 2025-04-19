@@ -217,6 +217,50 @@ def render_chartmetric_tab():
                 else:
                     st.warning(f"{issue} Please check your data.")
             
+            # === DEBUG INFO: CHARTMETRIC API DATA ===
+            st.subheader("Debug Info: ChartMetric API Data")
+            
+            # Display data shape
+            st.write(f"Data shape (rows, columns): {artist_monthly_listeners_df.shape}")
+            
+            # Display date range
+            min_date = artist_monthly_listeners_df['Date'].min()
+            max_date = artist_monthly_listeners_df['Date'].max()
+            st.write(f"Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+            
+            # Display data types
+            st.write("Data types:")
+            st.write(artist_monthly_listeners_df.dtypes)
+            
+            # Display basic statistics
+            st.write("Monthly Listeners statistics:")
+            st.write(artist_monthly_listeners_df['Monthly Listeners'].describe())
+            
+            # Display first 5 rows
+            st.write("First 5 rows:")
+            st.write(artist_monthly_listeners_df.head())
+            
+            # Display last 5 rows
+            st.write("Last 5 rows:")
+            st.write(artist_monthly_listeners_df.tail())
+            
+            # Show how many nulls/NaNs exist in the data
+            null_counts = artist_monthly_listeners_df.isnull().sum()
+            st.write("Null values per column:")
+            st.write(null_counts)
+            
+            # Check for duplicate dates
+            duplicate_dates = artist_monthly_listeners_df[artist_monthly_listeners_df.duplicated('Date', keep=False)]
+            st.write(f"Duplicate dates: {len(duplicate_dates)}")
+            if len(duplicate_dates) > 0:
+                st.write("Duplicate date entries:")
+                st.write(duplicate_dates)
+            
+            # Display value ranges
+            st.write(f"Min Monthly Listeners: {artist_monthly_listeners_df['Monthly Listeners'].min()}")
+            st.write(f"Max Monthly Listeners: {artist_monthly_listeners_df['Monthly Listeners'].max()}")
+            
+            # === END DEBUG INFO ===
            
             # 5. INITIAL DECAY ANALYSIS
             # Calculate decay rates using our dedicated function - match file uploader implementation
@@ -224,6 +268,29 @@ def render_chartmetric_tab():
             
             # For visualization and UI, we still need the full analysis
             decay_analysis = analyze_listener_decay(artist_monthly_listeners_df)
+
+            # === DEBUG INFO: AFTER ANALYSIS ===
+            st.subheader("Debug Info: After Analysis")
+            
+            # Display date filtered data shape
+            st.write(f"Filtered data shape: {decay_analysis['date_filtered_listener_data'].shape}")
+            
+            # Display normalized date range
+            st.write(f"Normalized start date: {decay_analysis['normalized_start_date']}")
+            st.write(f"Normalized end date: {decay_analysis['normalized_end_date']}")
+            
+            # Display fitted parameters 
+            st.write(f"Fitted parameters: S0={decay_analysis['fitted_decay_parameters'][0]}, k={decay_analysis['fitted_decay_parameters'][1]}")
+            
+            # Display first 5 rows of filtered data
+            st.write("First 5 rows of filtered data:")
+            st.write(decay_analysis['date_filtered_listener_data'].head())
+            
+            # Display last 5 rows of filtered data
+            st.write("Last 5 rows of filtered data:")
+            st.write(decay_analysis['date_filtered_listener_data'].tail())
+            
+            # === END DEBUG INFO ===
 
             # ===== UI COMPONENTS SECTION =====
             # Get normalized dates for consistent month-based calculations
@@ -247,8 +314,20 @@ def render_chartmetric_tab():
 
             # Update the decay calculation if the user changes the date range
             if start_date != decay_analysis['normalized_start_date'] or end_date != decay_analysis['normalized_end_date']:
+                # === DEBUG INFO: DATE RANGE CHANGED ===
+                st.write("Date range changed")
+                st.write(f"New start date: {start_date}")
+                st.write(f"New end date: {end_date}")
+                # === END DEBUG INFO ===
+                
                 mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, start_date, end_date)
                 decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
+                
+                # === DEBUG INFO: AFTER DATE RANGE CHANGE ===
+                st.write("After date range change:")
+                st.write(f"New filtered data shape: {decay_analysis['date_filtered_listener_data'].shape}")
+                st.write(f"New fitted parameters: S0={decay_analysis['fitted_decay_parameters'][0]}, k={decay_analysis['fitted_decay_parameters'][1]}")
+                # === END DEBUG INFO ===
             
             # Extract required data from the analysis for visualization
             date_filtered_listener_data = decay_analysis['date_filtered_listener_data']
