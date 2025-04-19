@@ -30,6 +30,13 @@ from utils.decay_models import (
 )
 from utils.population_utils.country_code_to_name import country_code_to_name
 
+# ===== CONFIGURATION =====
+# Set the sample rate for decay rate calculations
+# - sample_rate=1: Uses all data points (current setting)
+# - sample_rate=7: Uses every 7th data point (default in file_uploader_tab)
+# Change this value if you want to match the file_uploader_tab behavior
+SAMPLE_RATE = 1
+
 def get_artist_by_id(artist_id):
     """Get artist details by Chartmetric ID"""
     try:
@@ -263,11 +270,14 @@ def render_chartmetric_tab():
             # === END DEBUG INFO ===
            
             # 5. INITIAL DECAY ANALYSIS
-            # Calculate decay rates using our dedicated function - match file uploader implementation
-            mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df)
+            # Use SAMPLE_RATE constant to control data sampling
+            # Currently set to 1 to use all data points (no sampling)
+            # To match file_uploader behavior, change SAMPLE_RATE to 7 at the top of the file
+            mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, sample_rate=SAMPLE_RATE)
+            decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, sample_rate=SAMPLE_RATE)
             
-            # For visualization and UI, we still need the full analysis
-            decay_analysis = analyze_listener_decay(artist_monthly_listeners_df)
+            # Show sampling rate being used
+            st.write(f"Sampling Rate: {SAMPLE_RATE} {'(using all data points)' if SAMPLE_RATE == 1 else '(sampling every ' + str(SAMPLE_RATE) + 'th data point)'}")
 
             # === DEBUG INFO: AFTER ANALYSIS ===
             st.subheader("Debug Info: After Analysis")
@@ -320,8 +330,9 @@ def render_chartmetric_tab():
                 st.write(f"New end date: {end_date}")
                 # === END DEBUG INFO ===
                 
-                mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, start_date, end_date)
-                decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
+                # Use consistent SAMPLE_RATE for date range changes as well
+                mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, start_date, end_date, sample_rate=SAMPLE_RATE)
+                decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date, sample_rate=SAMPLE_RATE)
                 
                 # === DEBUG INFO: AFTER DATE RANGE CHANGE ===
                 st.write("After date range change:")
