@@ -30,13 +30,6 @@ from utils.decay_models import (
 )
 from utils.population_utils.country_code_to_name import country_code_to_name
 
-# ===== CONFIGURATION =====
-# Set the sample rate for decay rate calculations
-# - sample_rate=1: Uses all data points (current setting)
-# - sample_rate=7: Uses every 7th data point (default in file_uploader_tab)
-# Change this value if you want to match the file_uploader_tab behavior
-SAMPLE_RATE = 1
-
 def get_artist_by_id(artist_id):
     """Get artist details by Chartmetric ID"""
     try:
@@ -51,16 +44,6 @@ def get_artist_by_id(artist_id):
     except Exception as e:
         st.error(f"Error fetching artist details: {str(e)}")
         return None
-
-def search_tracks(artist_id):
-    """Get tracks for an artist using ChartMetric API"""
-    # This is a placeholder - would need to implement ChartMetric artist tracks API
-    st.warning("Track search API not yet implemented")
-    # Return demo tracks for now
-    return [
-        {"id": 54321, "name": "Sample Track 1"},
-        {"id": 54322, "name": "Sample Track 2"}
-    ]
 
 def get_artist_monthly_listeners(artist_id):
     """Get artist monthly listeners from ChartMetric API"""
@@ -84,32 +67,6 @@ def get_artist_monthly_listeners(artist_id):
     except Exception as e:
         st.error(f"Error fetching artist monthly listeners: {str(e)}")
         return pd.DataFrame(columns=['Date', 'Monthly Listeners'])
-
-def get_track_stream_data(track_id):
-    """Get track streaming data from ChartMetric API"""
-    try:
-        # Get track details first
-        track_details = chartmetric.get_track_detail(track_id=track_id)
-        
-        # Get track streaming data
-        streams_data = chartmetric.get_track_sp_streams_campare(track_id=track_id)
-        
-        # Convert to DataFrame
-        streams_df = pd.DataFrame([
-            {"Date": item.timestp, "CumulativeStreams": item.value}
-            for item in streams_data
-        ])
-        
-        # Ensure Date is datetime format
-        streams_df['Date'] = pd.to_datetime(streams_df['Date'])
-        
-        # Sort by date
-        streams_df = streams_df.sort_values('Date')
-        
-        return streams_df, track_details
-    except Exception as e:
-        st.error(f"Error fetching track streaming data: {str(e)}")
-        return pd.DataFrame(columns=['Date', 'CumulativeStreams']), None
 
 def get_audience_geography(artist_id):
     """Get audience geography data from ChartMetric API"""
@@ -224,83 +181,12 @@ def render_chartmetric_tab():
                 else:
                     st.warning(f"{issue} Please check your data.")
             
-            # === DEBUG INFO: CHARTMETRIC API DATA ===
-            st.subheader("Debug Info: ChartMetric API Data")
-            
-            # Display data shape
-            st.write(f"Data shape (rows, columns): {artist_monthly_listeners_df.shape}")
-            
-            # Display date range
-            min_date = artist_monthly_listeners_df['Date'].min()
-            max_date = artist_monthly_listeners_df['Date'].max()
-            st.write(f"Date range: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
-            
-            # Display data types
-            st.write("Data types:")
-            st.write(artist_monthly_listeners_df.dtypes)
-            
-            # Display basic statistics
-            st.write("Monthly Listeners statistics:")
-            st.write(artist_monthly_listeners_df['Monthly Listeners'].describe())
-            
-            # Display first 5 rows
-            st.write("First 5 rows:")
-            st.write(artist_monthly_listeners_df.head())
-            
-            # Display last 5 rows
-            st.write("Last 5 rows:")
-            st.write(artist_monthly_listeners_df.tail())
-            
-            # Show how many nulls/NaNs exist in the data
-            null_counts = artist_monthly_listeners_df.isnull().sum()
-            st.write("Null values per column:")
-            st.write(null_counts)
-            
-            # Check for duplicate dates
-            duplicate_dates = artist_monthly_listeners_df[artist_monthly_listeners_df.duplicated('Date', keep=False)]
-            st.write(f"Duplicate dates: {len(duplicate_dates)}")
-            if len(duplicate_dates) > 0:
-                st.write("Duplicate date entries:")
-                st.write(duplicate_dates)
-            
-            # Display value ranges
-            st.write(f"Min Monthly Listeners: {artist_monthly_listeners_df['Monthly Listeners'].min()}")
-            st.write(f"Max Monthly Listeners: {artist_monthly_listeners_df['Monthly Listeners'].max()}")
-            
-            # === END DEBUG INFO ===
-           
             # 5. INITIAL DECAY ANALYSIS
-            # Use SAMPLE_RATE constant to control data sampling
-            # Currently set to 1 to use all data points (no sampling)
-            # To match file_uploader behavior, change SAMPLE_RATE to 7 at the top of the file
-            mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, sample_rate=SAMPLE_RATE)
-            decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, sample_rate=SAMPLE_RATE)
+            # Calculate decay rates using our dedicated function - just like file_uploader_tab
+            mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df)
             
-            # Show sampling rate being used
-            st.write(f"Sampling Rate: {SAMPLE_RATE} {'(using all data points)' if SAMPLE_RATE == 1 else '(sampling every ' + str(SAMPLE_RATE) + 'th data point)'}")
-
-            # === DEBUG INFO: AFTER ANALYSIS ===
-            st.subheader("Debug Info: After Analysis")
-            
-            # Display date filtered data shape
-            st.write(f"Filtered data shape: {decay_analysis['date_filtered_listener_data'].shape}")
-            
-            # Display normalized date range
-            st.write(f"Normalized start date: {decay_analysis['normalized_start_date']}")
-            st.write(f"Normalized end date: {decay_analysis['normalized_end_date']}")
-            
-            # Display fitted parameters 
-            st.write(f"Fitted parameters: S0={decay_analysis['fitted_decay_parameters'][0]}, k={decay_analysis['fitted_decay_parameters'][1]}")
-            
-            # Display first 5 rows of filtered data
-            st.write("First 5 rows of filtered data:")
-            st.write(decay_analysis['date_filtered_listener_data'].head())
-            
-            # Display last 5 rows of filtered data
-            st.write("Last 5 rows of filtered data:")
-            st.write(decay_analysis['date_filtered_listener_data'].tail())
-            
-            # === END DEBUG INFO ===
+            # For visualization and UI, we still need the full analysis
+            decay_analysis = analyze_listener_decay(artist_monthly_listeners_df)
 
             # ===== UI COMPONENTS SECTION =====
             # Get normalized dates for consistent month-based calculations
@@ -324,21 +210,8 @@ def render_chartmetric_tab():
 
             # Update the decay calculation if the user changes the date range
             if start_date != decay_analysis['normalized_start_date'] or end_date != decay_analysis['normalized_end_date']:
-                # === DEBUG INFO: DATE RANGE CHANGED ===
-                st.write("Date range changed")
-                st.write(f"New start date: {start_date}")
-                st.write(f"New end date: {end_date}")
-                # === END DEBUG INFO ===
-                
-                # Use consistent SAMPLE_RATE for date range changes as well
-                mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, start_date, end_date, sample_rate=SAMPLE_RATE)
-                decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date, sample_rate=SAMPLE_RATE)
-                
-                # === DEBUG INFO: AFTER DATE RANGE CHANGE ===
-                st.write("After date range change:")
-                st.write(f"New filtered data shape: {decay_analysis['date_filtered_listener_data'].shape}")
-                st.write(f"New fitted parameters: S0={decay_analysis['fitted_decay_parameters'][0]}, k={decay_analysis['fitted_decay_parameters'][1]}")
-                # === END DEBUG INFO ===
+                mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, start_date, end_date)
+                decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
             
             # Extract required data from the analysis for visualization
             date_filtered_listener_data = decay_analysis['date_filtered_listener_data']
@@ -377,14 +250,6 @@ def render_chartmetric_tab():
             
             # Display the plot
             st.pyplot(fig)
-            
-            # Optional: Display raw data
-            if st.checkbox("Show raw monthly listener data", key="chartmetric_raw_data_checkbox"):
-                st.dataframe(artist_monthly_listeners_df)
-                
-            # Display data used for calculation
-            if st.checkbox("Show filtered data used for calculation", key="chartmetric_filtered_data_checkbox"):
-                st.dataframe(date_filtered_listener_data)
         else:
             st.error("The API data does not contain the required columns 'Date' and 'Monthly Listeners'.")
     
