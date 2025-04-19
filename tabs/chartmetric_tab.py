@@ -17,7 +17,8 @@ from utils.data_processing import (
 )
 from utils.decay_models import (
     exponential_decay,
-    analyze_listener_decay
+    analyze_listener_decay,
+    calculate_monthly_listener_decay_rate
 )
 from utils.population_utils.country_code_to_name import country_code_to_name
 
@@ -163,11 +164,14 @@ def render_chartmetric_tab():
             listeners_df = get_artist_monthly_listeners(artist['id'])
             
             if not listeners_df.empty:
-                # Analyze listener decay
+                # Calculate the decay rate directly
+                mldr = calculate_monthly_listener_decay_rate(listeners_df)
+                
+                # Get the full analysis for visualization
                 decay_analysis = analyze_listener_decay(listeners_df)
                 
                 # Show metrics
-                st.write(f"Exponential decay rate: {decay_analysis['mldr']}")
+                st.write(f"Exponential decay rate: {mldr}")
                 
                 # Display chart
                 fig, ax = plt.subplots(figsize=(10, 4))

@@ -40,7 +40,8 @@ from utils.decay_models import (
     exponential_decay,
     remove_anomalies,
     fit_decay_curve,
-    analyze_listener_decay
+    analyze_listener_decay,
+    calculate_monthly_listener_decay_rate
 )
 
 # Import track forecasting functions (now including parameter update functions)
@@ -131,7 +132,10 @@ def render_file_uploader_tab():
             
            
             # 5. INITIAL DECAY ANALYSIS
-            # Calculate decay rates for the full dataset initially
+            # Calculate decay rates using our dedicated function
+            mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df)
+            
+            # For visualization and UI, we still need the full analysis
             decay_analysis = analyze_listener_decay(artist_monthly_listeners_df)
 
             # ===== UI COMPONENTS SECTION =====
@@ -153,13 +157,13 @@ def render_file_uploader_tab():
             start_date = pd.Timestamp(start_date)
             end_date = pd.Timestamp(end_date)
 
-            # Update the decay analysis if the user changes the date range
+            # Update the decay calculation if the user changes the date range
             if start_date != decay_analysis['normalized_start_date'] or end_date != decay_analysis['normalized_end_date']:
+                mldr = calculate_monthly_listener_decay_rate(artist_monthly_listeners_df, start_date, end_date)
                 decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date)
             
-            # Extract required data from the analysis
+            # Extract required data from the analysis for visualization
             date_filtered_listener_data = decay_analysis['date_filtered_listener_data']
-            mldr = decay_analysis['mldr']
             fitted_decay_parameters = decay_analysis['fitted_decay_parameters']
             normalized_start_date = decay_analysis['normalized_start_date']
             normalized_end_date = decay_analysis['normalized_end_date']

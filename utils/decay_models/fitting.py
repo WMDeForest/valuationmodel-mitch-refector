@@ -188,4 +188,70 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
 
 # For backward compatibility
 calculate_decay_rate = fit_decay_curve
-calculate_monthly_listener_decay = analyze_listener_decay 
+calculate_monthly_listener_decay = analyze_listener_decay
+
+def calculate_monthly_listener_decay_rate(df, start_date=None, end_date=None, sample_rate=7):
+    """
+    Calculate the Monthly Listener Decay Rate (MLDR) from any source of listener data.
+    
+    This standalone function extracts the decay rate from listener data without any UI components
+    or visualization. It can be used from any part of the application that needs just the decay rate.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Raw data containing:
+        - 'Date': Column with dates (will be converted to datetime if not already)
+        - 'Monthly Listeners': Column with listener count values
+    
+    start_date, end_date : datetime, optional
+        Date range to analyze. If provided, only data within this range will be used
+        for decay rate calculation. Useful for excluding periods with unusual activity.
+        
+    sample_rate : int, optional
+        Controls data density by sampling every nth row:
+        - 1: Use all data points (no sampling)
+        - 7: Weekly sampling (default, recommended for daily data)
+        - 30: Monthly sampling (for very dense data)
+        
+    Returns:
+    --------
+    float: Monthly Listener Decay Rate (decimal value, e.g., 0.05 = 5% monthly decline)
+    
+    Example:
+    --------
+    ```python
+    # Calculate MLDR from CSV data:
+    import pandas as pd
+    from utils.decay_models import calculate_monthly_listener_decay_rate
+    
+    df = pd.read_csv('listener_data.csv')
+    df['Date'] = pd.to_datetime(df['Date'])
+    mldr = calculate_monthly_listener_decay_rate(df)
+    
+    print(f"Monthly decay rate: {mldr:.2%}")  # e.g. "5.25%"
+    ```
+    
+    Notes:
+    ------
+    - This function is a simplified version of analyze_listener_decay() that returns only the decay rate
+    - It performs the same data processing steps but without returning the intermediate results
+    - Lower MLDR values indicate better listener retention over time
+    """
+    # Validate input DataFrame
+    required_columns = ['Date', 'Monthly Listeners']
+    if not all(col in df.columns for col in required_columns):
+        missing = [col for col in required_columns if col not in df.columns]
+        raise ValueError(f"Input DataFrame missing required columns: {missing}")
+    
+    # Ensure dates are datetime
+    if not pd.api.types.is_datetime64_any_dtype(df['Date']):
+        df = df.copy()
+        df['Date'] = pd.to_datetime(df['Date'])
+    
+    # Use the analyze_listener_decay function to get the full analysis
+    # This reuses all the existing logic for consistent results
+    result = analyze_listener_decay(df, start_date, end_date, sample_rate)
+    
+    # Return just the decay rate (MLDR)
+    return result['mldr'] 
