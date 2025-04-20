@@ -61,7 +61,7 @@ def fit_decay_curve(monthly_data):
     decay_rate = fitted_decay_parameters[1]
     return decay_rate, fitted_decay_parameters
 
-def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None, sample_rate=7):
+def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None, sample_rate=7, dayfirst=True):
     """
     Complete end-to-end analysis of monthly listener decay from any data source.
     
@@ -96,6 +96,11 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
         - 30: Monthly sampling (for very dense data)
         Higher values produce sparser datasets.
         
+    dayfirst : bool, optional
+        If True, parse dates with day first (DD/MM/YYYY format).
+        If False, parse dates with month first (MM/DD/YYYY format).
+        Default is True for international date format support.
+        
     Returns:
     --------
     dict: A complete results package containing:
@@ -116,8 +121,7 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     ```python
     # Complete analysis from a CSV file:
     df = pd.read_csv('listener_data.csv')
-    df['Date'] = pd.to_datetime(df['Date'])
-    results = analyze_listener_decay(df)
+    results = analyze_listener_decay(df)  # Date conversion happens automatically
     
     # Access key results:
     decay_rate = results['mldr']
@@ -133,6 +137,25 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
     - For most use cases, you don't need to call the individual processing functions
     - The MLDR is a key metric for valuation models and forecasting
     """
+    # Ensure required columns exist
+    required_columns = ['Date', 'Monthly Listeners']
+    if not all(col in df_monthly_listeners.columns for col in required_columns):
+        missing = [col for col in required_columns if col not in df_monthly_listeners.columns]
+        raise ValueError(f"Input DataFrame missing required columns: {missing}")
+    
+    # Ensure dates are datetime with proper handling for day-first format
+    if not pd.api.types.is_datetime64_any_dtype(df_monthly_listeners['Date']):
+        df_monthly_listeners = df_monthly_listeners.copy()
+        try:
+            df_monthly_listeners['Date'] = pd.to_datetime(df_monthly_listeners['Date'], dayfirst=dayfirst, errors='coerce')
+            
+            # Check for unparseable dates
+            if df_monthly_listeners['Date'].isna().any():
+                # Continue with analysis but log a warning
+                print("Warning: Some dates couldn't be parsed and have been set to 'NaT'. This may affect the analysis.")
+        except Exception as e:
+            raise ValueError(f"Failed to convert Date column: {str(e)}")
+    
     # Ensure data is sorted
     sorted_monthly_listeners = df_monthly_listeners.sort_values(by='Date')
     
@@ -190,7 +213,7 @@ def analyze_listener_decay(df_monthly_listeners, start_date=None, end_date=None,
 calculate_decay_rate = fit_decay_curve
 calculate_monthly_listener_decay = analyze_listener_decay
 
-def calculate_monthly_listener_decay_rate(df, start_date=None, end_date=None, sample_rate=7):
+def calculate_monthly_listener_decay_rate(df, start_date=None, end_date=None, sample_rate=7, dayfirst=True):
     """
     Calculate the Monthly Listener Decay Rate (MLDR) from any source of listener data.
     
@@ -214,6 +237,11 @@ def calculate_monthly_listener_decay_rate(df, start_date=None, end_date=None, sa
         - 7: Weekly sampling (default, recommended for daily data)
         - 30: Monthly sampling (for very dense data)
         
+    dayfirst : bool, optional
+        If True, parse dates with day first (DD/MM/YYYY format).
+        If False, parse dates with month first (MM/DD/YYYY format).
+        Default is True for international date format support.
+        
     Returns:
     --------
     float: Monthly Listener Decay Rate (decimal value, e.g., 0.05 = 5% monthly decline)
@@ -226,8 +254,7 @@ def calculate_monthly_listener_decay_rate(df, start_date=None, end_date=None, sa
     from utils.decay_models import calculate_monthly_listener_decay_rate
     
     df = pd.read_csv('listener_data.csv')
-    df['Date'] = pd.to_datetime(df['Date'])
-    mldr = calculate_monthly_listener_decay_rate(df)
+    mldr = calculate_monthly_listener_decay_rate(df)  # Note: date conversion happens automatically
     
     print(f"Monthly decay rate: {mldr:.2%}")  # e.g. "5.25%"
     ```
@@ -244,10 +271,18 @@ def calculate_monthly_listener_decay_rate(df, start_date=None, end_date=None, sa
         missing = [col for col in required_columns if col not in df.columns]
         raise ValueError(f"Input DataFrame missing required columns: {missing}")
     
-    # Ensure dates are datetime
+    # Ensure dates are datetime with proper handling for day-first format
     if not pd.api.types.is_datetime64_any_dtype(df['Date']):
         df = df.copy()
-        df['Date'] = pd.to_datetime(df['Date'])
+        try:
+            df['Date'] = pd.to_datetime(df['Date'], dayfirst=dayfirst, errors='coerce')
+            
+            # Check for unparseable dates
+            if df['Date'].isna().any():
+                # Continue with analysis but log a warning
+                print("Warning: Some dates couldn't be parsed and have been set to 'NaT'. This may affect the analysis.")
+        except Exception as e:
+            raise ValueError(f"Failed to convert Date column: {str(e)}")
     
     # Use the analyze_listener_decay function to get the full analysis
     # This reuses all the existing logic for consistent results
