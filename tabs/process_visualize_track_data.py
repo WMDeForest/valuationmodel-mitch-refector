@@ -105,12 +105,33 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
     -----------
     artist_monthly_listeners_df : pandas.DataFrame, optional
         DataFrame containing artist monthly listeners data
+        Required columns:
+        - Date: in DD/MM/YYYY format
+        - Monthly Listeners: count of monthly listeners per date
+        - Should cover at least 6 months of data for accurate decay rate calculation
+        
     catalog_file_data : pandas.DataFrame or BytesIO, optional
         DataFrame or file object containing track catalog data
+        Required columns:
+        - Date: in DD/MM/YYYY format
+        - Value/CumulativeStreams: total cumulative streams as of each date
+        - Track Name: name identifier for each track
+        - Each track should have at least 90 days of data including release date
+        
     audience_geography_data : pandas.DataFrame, optional
         DataFrame containing audience geography data
+        Required columns:
+        - Country: country code (ISO 2-letter format)
+        - Listeners/Percentage: number or percentage of listeners per country
+        - If not provided, model defaults to 100% US market
+        
     ownership_data : pandas.DataFrame, optional
         DataFrame containing ownership data
+        Required columns:
+        - Track Name: matching the names in catalog file
+        - Ownership Percentage: percentage owned (0-100)
+        - MLC Claim: percentage of mechanical rights claimed (0-100)
+        - If not provided, assumes 100% ownership and 0% MLC claims
     """
     
     # ===== ARTIST LISTENER DECAY RATE ANALYSIS =====
