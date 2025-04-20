@@ -101,100 +101,94 @@ from utils.fraud_detection import detect_streaming_fraud
 def render_file_uploader_tab():
     """Render the File Uploader tab with all the necessary UI components and processing"""
     
-    # ===== TAB 1: SPOTIFY MONTHLY LISTENERS ANALYSIS =====
-    # 1. DATA UPLOAD
+    # ===== FILE UPLOAD SECTION =====
+    # 1. Artist Monthly Listeners Data
     uploaded_file = st.file_uploader("Artist Monthly Spotify Listeners", type="csv")
-
+    
+    # Process artist data if uploaded
+    mldr = 0.05  # Default value if no artist data
     if uploaded_file is not None:
-        # ===== DATA PROCESSING SECTION =====
-        # 1. DATA LOADING
         # Read the uploaded CSV file
         artist_monthly_listeners_df = pd.read_csv(uploaded_file)
         
         # Calculate decay rates using our dedicated function
-        # (This now handles column validation, date conversion with dayfirst=True, and error handling)
         try:
             # Get the full decay analysis (which contains the MLDR and all visualization data)
             decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, dayfirst=True)
             
             # Extract the MLDR (Monthly Listener Decay Rate) from the analysis results
             mldr = decay_analysis['mldr']
+            
+            # Get normalized dates for consistent month-based calculations
+            min_date = decay_analysis['normalized_start_date'].date()  # Convert to datetime.date
+            max_date = decay_analysis['normalized_end_date'].date()    # Convert to datetime.date
+            
+            # Date Range Selection UI
+            st.write("Select Date Range:")
+            start_date, end_date = st.slider(
+                "Select date range",
+                min_value=min_date,
+                max_value=max_date,
+                value=(min_date, max_date),
+                format="YYYY-MM-DD"
+            )
+            
+            # Convert slider values to Timestamp objects
+            start_date = pd.Timestamp(start_date)
+            end_date = pd.Timestamp(end_date)
+
+            # Update the decay calculation if the user changes the date range
+            if start_date != decay_analysis['normalized_start_date'] or end_date != decay_analysis['normalized_end_date']:
+                try:
+                    # Recalculate the decay analysis with the new date range
+                    decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date, dayfirst=True)
+                    
+                    # Extract the updated MLDR
+                    mldr = decay_analysis['mldr']
+                except ValueError as e:
+                    st.error(f"Error updating date range: {str(e)}")
+            
+            # Display Results
+            st.write(f'Exponential decay rate: {mldr}')
+            
+            # Always show normalized dates for transparency
+            st.write(f'Normalized date range used: {decay_analysis["normalized_start_date"].strftime("%Y-%m-%d")} to {decay_analysis["normalized_end_date"].strftime("%Y-%m-%d")}')
+            
+            # Visualization
+            fig, ax = plt.subplots(figsize=(10, 4))
+            # Plot the moving average
+            ax.plot(decay_analysis['date_filtered_listener_data']['Date'], decay_analysis['date_filtered_listener_data']['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
+            # Plot the fitted decay curve using pre-calculated parameters
+            ax.plot(decay_analysis['date_filtered_listener_data']['Date'], exponential_decay(decay_analysis['date_filtered_listener_data']['Months'], *decay_analysis['fitted_decay_parameters']), 
+                   label='Fitted Decay Curve', color='red', linestyle='--')
+            
+            # Plot formatting and styling
+            ax.set_xlabel('Date', fontsize=12)
+            ax.set_ylabel('Monthly Listeners', fontsize=12)
+            ax.set_title(f'Moving Average and Exponential Decay', fontsize=14, weight='bold')
+            ax.legend()
+            ax.set_ylim(bottom=0)
+            plt.xticks(rotation=45)
+            
+            # Visual enhancements
+            fig.patch.set_visible(False)
+            ax.set_facecolor('none')
+            ax.patch.set_alpha(0)
+            plt.tight_layout()
+            
+            # Display the plot
+            st.pyplot(fig)
+            
         except ValueError as e:
-            st.error(f"Error processing data: {str(e)}")
-            return
-
-        # ===== UI COMPONENTS SECTION =====
-        # Get normalized dates for consistent month-based calculations
-        min_date = decay_analysis['normalized_start_date'].date()  # Convert to datetime.date
-        max_date = decay_analysis['normalized_end_date'].date()    # Convert to datetime.date
-        
-        # 6. DATE RANGE SELECTION
-        st.write("Select Date Range:")
-        start_date, end_date = st.slider(
-            "Select date range",
-            min_value=min_date,
-            max_value=max_date,
-            value=(min_date, max_date),
-            format="YYYY-MM-DD"
-        )
-        
-        # Convert slider values to Timestamp objects
-        start_date = pd.Timestamp(start_date)
-        end_date = pd.Timestamp(end_date)
-
-        # Update the decay calculation if the user changes the date range
-        if start_date != decay_analysis['normalized_start_date'] or end_date != decay_analysis['normalized_end_date']:
-            try:
-                # Recalculate the decay analysis with the new date range
-                decay_analysis = analyze_listener_decay(artist_monthly_listeners_df, start_date, end_date, dayfirst=True)
-                
-                # Extract the updated MLDR
-                mldr = decay_analysis['mldr']
-            except ValueError as e:
-                st.error(f"Error updating date range: {str(e)}")
-                return
-
-        # ===== RESULTS DISPLAY SECTION =====
-        # 8. SHOW METRICS
-        st.write(f'Exponential decay rate: {mldr}')
-        
-        # Always show normalized dates for transparency
-        st.write(f'Normalized date range used: {decay_analysis["normalized_start_date"].strftime("%Y-%m-%d")} to {decay_analysis["normalized_end_date"].strftime("%Y-%m-%d")}')
-        
-        # 9. VISUALIZATION
-        fig, ax = plt.subplots(figsize=(10, 4))
-        # Plot the moving average
-        ax.plot(decay_analysis['date_filtered_listener_data']['Date'], decay_analysis['date_filtered_listener_data']['4_Week_MA'], label='Moving Average', color='tab:blue', linewidth=2)
-        # Plot the fitted decay curve using pre-calculated parameters
-        ax.plot(decay_analysis['date_filtered_listener_data']['Date'], exponential_decay(decay_analysis['date_filtered_listener_data']['Months'], *decay_analysis['fitted_decay_parameters']), 
-               label='Fitted Decay Curve', color='red', linestyle='--')
-        
-        # Plot formatting and styling
-        ax.set_xlabel('Date', fontsize=12)
-        ax.set_ylabel('Monthly Listeners', fontsize=12)
-        ax.set_title(f'Moving Average and Exponential Decay', fontsize=14, weight='bold')
-        ax.legend()
-        ax.set_ylim(bottom=0)
-        plt.xticks(rotation=45)
-        
-        # Visual enhancements
-        fig.patch.set_visible(False)
-        ax.set_facecolor('none')
-        ax.patch.set_alpha(0)
-        plt.tight_layout()
-        
-        # Display the plot
-        st.pyplot(fig)
+            st.error(f"Error processing artist data: {str(e)}")
     else:
         st.warning("No artist monthly listeners data provided. This may impact decay rate calculations.")
     
-    # ===== TRACK DATA MANAGEMENT =====
-    # 1. FILE UPLOADS SECTION
-    # Updated to use a single catalog file instead of multiple individual track files
+    # Track Catalog Data
     uploaded_catalog_file = st.file_uploader("Track Catalog CSV", type=["csv"], 
                                              help="Upload a single CSV containing data for multiple tracks.")
     
-    uploaded_file_3 = st.file_uploader("Audience Geography", type=["csv"])
+    uploaded_file_audience_geography = st.file_uploader("Audience Geography", type=["csv"])
     uploaded_file_ownership = st.file_uploader("MLC Claimed and Song Ownership", type="csv")
 
     # Parse the catalog file to extract individual track data
@@ -251,10 +245,6 @@ def render_file_uploader_tab():
         if not selected_songs:
             st.error("No songs selected for analysis. Please select at least one song.")
             return
-            
-        if uploaded_file is None:
-            st.warning("No artist monthly listeners data provided. This may impact decay rate calculations.")
-            mldr = 0.05  # Use a default value if no artist data
         
         # Process each selected song's data from our track_data_map
         for selected_song in selected_songs:
@@ -329,7 +319,7 @@ def render_file_uploader_tab():
         # Process the audience geography data to determine geographic distribution of listeners
         # This data is used to apply country-specific royalty rates in revenue projections
         # If no geography data is provided, assume 100% US market for royalty calculations
-        listener_geography_df, listener_percentage_usa = process_audience_geography(uploaded_file_3)
+        listener_geography_df, listener_percentage_usa = process_audience_geography(uploaded_file_audience_geography)
 
         # ===== OWNERSHIP DATA PROCESSING =====
         # Process ownership and MLC claim information to accurately calculate revenue shares
