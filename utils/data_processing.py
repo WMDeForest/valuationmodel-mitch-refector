@@ -96,8 +96,25 @@ def extract_earliest_date(df, date_column, input_format='%b %d, %Y', output_form
     Returns:
         str: The earliest date formatted according to output_format
     """
-    earliest_date = pd.to_datetime(df[date_column].iloc[0], format=input_format).strftime(output_format)
-    return earliest_date
+    try:
+        # First attempt with specified format
+        earliest_date = pd.to_datetime(df[date_column].iloc[0], format=input_format).strftime(output_format)
+        return earliest_date
+    except ValueError:
+        # If first format fails, try common formats
+        try:
+            # Try with mixed format with dayfirst=True (for DD/MM/YYYY format)
+            earliest_date = pd.to_datetime(df[date_column].iloc[0], dayfirst=True).strftime(output_format)
+            return earliest_date
+        except ValueError:
+            # If still failing, try dayfirst=False (for MM/DD/YYYY format)
+            try:
+                earliest_date = pd.to_datetime(df[date_column].iloc[0], dayfirst=False).strftime(output_format)
+                return earliest_date
+            except ValueError:
+                # If all else fails, raise an error with helpful message
+                raise ValueError(f"Could not parse date '{df[date_column].iloc[0]}'. "
+                                 f"Please ensure dates are in a standard format.")
 
 def calculate_period_streams(df, cumulative_column, days_back):
     """
@@ -327,3 +344,90 @@ def extract_track_metrics(track_data_df, track_name=None):
     }
     
     return metrics 
+
+def parse_catalog_file(catalog_file):
+    """
+    Parse a catalog CSV file containing multiple tracks and split it into individual track dataframes.
+    
+    Args:
+        catalog_file: The uploaded CSV file containing multiple tracks
+        
+    Returns:
+        tuple: (track_data_map, track_names, errors)
+            - track_data_map: Dictionary mapping track names to their respective dataframes
+            - track_names: List of unique track names found in the file
+            - errors: List of error messages, empty if no errors occurred
+    """
+    errors = []
+    
+    if catalog_file is None:
+        return {}, [], errors
+    
+    # Read the catalog CSV file
+    try:
+        catalog_df = pd.read_csv(catalog_file)
+    except Exception as e:
+        errors.append(f"Failed to parse CSV file: {str(e)}")
+        return {}, [], errors
+    
+    # Check if we have the required columns for processing
+    track_identifier_column = None
+    
+    # First, try to find Track Name column (exact match)
+    if 'Track Name' in catalog_df.columns:
+        track_identifier_column = 'Track Name'
+    # Try with case insensitive match
+    elif any(col.lower() == 'track name' for col in catalog_df.columns):
+        for col in catalog_df.columns:
+            if col.lower() == 'track name':
+                track_identifier_column = col
+                break
+    # If no Track Name, try Track URL as alternative
+    elif 'Track URL' in catalog_df.columns:
+        track_identifier_column = 'Track URL'
+    elif any(col.lower() == 'track url' for col in catalog_df.columns):
+        for col in catalog_df.columns:
+            if col.lower() == 'track url':
+                track_identifier_column = col
+                break
+    
+    # If we can't find a way to identify tracks, return empty
+    if track_identifier_column is None:
+        errors.append("The uploaded catalog file doesn't contain 'Track Name' or 'Track URL' columns.")
+        return {}, [], errors
+    
+    # Check for required data columns
+    if 'Date' not in catalog_df.columns:
+        errors.append("The uploaded catalog file doesn't contain a 'Date' column.")
+        return {}, [], errors
+    
+    # Check for Value column (might be named differently)
+    value_column = None
+    if 'Value' in catalog_df.columns:
+        value_column = 'Value'
+    elif 'CumulativeStreams' in catalog_df.columns:
+        value_column = 'CumulativeStreams'
+    
+    if value_column is None:
+        errors.append("The uploaded catalog file doesn't contain a 'Value' or 'CumulativeStreams' column.")
+        return {}, [], errors
+    
+    # Extract unique track names/identifiers
+    track_identifiers = catalog_df[track_identifier_column].unique().tolist()
+    
+    # Create a dictionary to store dataframes for each track
+    track_data_map = {}
+    
+    # Split the data by track
+    for track_id in track_identifiers:
+        # Filter data for this track
+        track_df = catalog_df[catalog_df[track_identifier_column] == track_id].copy()
+        
+        # Make sure we have the expected columns (Date and Value)
+        if value_column != 'Value':
+            track_df = track_df.rename(columns={value_column: 'Value'})
+        
+        # Store in the mapping - use the track identifier as the key
+        track_data_map[track_id] = track_df
+    
+    return track_data_map, track_identifiers, errors 
