@@ -96,8 +96,25 @@ def extract_earliest_date(df, date_column, input_format='%b %d, %Y', output_form
     Returns:
         str: The earliest date formatted according to output_format
     """
-    earliest_date = pd.to_datetime(df[date_column].iloc[0], format=input_format).strftime(output_format)
-    return earliest_date
+    try:
+        # First attempt with specified format
+        earliest_date = pd.to_datetime(df[date_column].iloc[0], format=input_format).strftime(output_format)
+        return earliest_date
+    except ValueError:
+        # If first format fails, try common formats
+        try:
+            # Try with mixed format with dayfirst=True (for DD/MM/YYYY format)
+            earliest_date = pd.to_datetime(df[date_column].iloc[0], dayfirst=True).strftime(output_format)
+            return earliest_date
+        except ValueError:
+            # If still failing, try dayfirst=False (for MM/DD/YYYY format)
+            try:
+                earliest_date = pd.to_datetime(df[date_column].iloc[0], dayfirst=False).strftime(output_format)
+                return earliest_date
+            except ValueError:
+                # If all else fails, raise an error with helpful message
+                raise ValueError(f"Could not parse date '{df[date_column].iloc[0]}'. "
+                                 f"Please ensure dates are in a standard format.")
 
 def calculate_period_streams(df, cumulative_column, days_back):
     """

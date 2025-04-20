@@ -218,6 +218,19 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
     
     if catalog_file_data is not None:
         track_data_map, track_names, parse_errors = parse_catalog_file(catalog_file_data)
+        
+        # Debug: Show information about the parsed catalog data
+        if track_names:
+            st.write("DEBUG - Parsed catalog data:")
+            for track_name in track_names[:1]:  # Show just the first track for brevity
+                track_df = track_data_map[track_name]
+                st.write(f"Sample data for track: {track_name}")
+                st.write(track_df.head(3))
+                st.write(f"Shape: {track_df.shape}, Columns: {track_df.columns.tolist()}")
+                
+                # Show value statistics if Value column exists
+                if 'Value' in track_df.columns:
+                    st.write(f"Value column stats - Min: {track_df['Value'].min()}, Max: {track_df['Value'].max()}, Mean: {track_df['Value'].mean():.2f}")
     
     # Display any parsing errors
     for error in parse_errors:
@@ -292,6 +305,19 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
                         track_data_df=df_track_data_unique,
                         track_name=track_name_unique
                     )
+                    
+                    # Debug: Show the extracted track metrics
+                    st.write(f"DEBUG - Extracted metrics for track: {track_name_unique}")
+                    st.write(f"Total historical streams: {track_metrics['total_historical_track_streams']:,}")
+                    st.write(f"Last 30 days streams: {track_metrics['track_streams_last_30days']:,}")
+                    st.write(f"Earliest track date: {track_metrics['earliest_track_date']}")
+                    
+                    # Debug: Show the raw data used to calculate total historical streams
+                    st.write("DEBUG - Raw data for historical streams calculation:")
+                    if 'CumulativeStreams' in df_track_data_unique.columns:
+                        st.write(f"Last CumulativeStreams value: {df_track_data_unique['CumulativeStreams'].iloc[-1]:,}")
+                    elif 'Value' in df_track_data_unique.columns:
+                        st.write(f"Last Value: {df_track_data_unique['Value'].iloc[-1]:,}")
                 
                     # Step 2: Generate track stream forecast using the metrics
                     forecast_result = build_complete_track_forecast(
@@ -307,6 +333,13 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
                 
                     # Combine track metrics and forecast results for compatibility with existing code
                     combined_result = {**track_metrics, **forecast_result}
+                    
+                    # Debug: Examine the forecast results
+                    st.write("DEBUG - Forecast results:")
+                    if 'forecast_df' in forecast_result:
+                        forecast_df = forecast_result['forecast_df']
+                        st.write(f"Forecast periods: {len(forecast_df)}")
+                        st.write(f"First 3 months projected streams: {forecast_df['predicted_streams_for_month'].iloc[:3].sum():,}")
                 
                     # Store the combined results
                     track_forecast_results[track_name_unique] = combined_result

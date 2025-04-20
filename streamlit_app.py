@@ -13,6 +13,9 @@ from tabs.process_visualize_track_data import process_and_visualize_track_data
 # Import ChartMetric service
 from services.chartmetric_services import chartmetric_service as chartmetric
 
+# Import country code to name utility
+from utils.population_utils.country_code_to_name import country_code_to_name
+
 # ===== APP INTERFACE SETUP =====
 st.title('Valuation Model_mitch_refactor')
 st.write("Analyze track valuation using historical streaming data")
@@ -107,6 +110,27 @@ elif data_source == "ChartMetric API":
                             if not streaming_data:
                                 st.warning("No streaming data found for this track.")
                                 return None
+                                
+                            # Display the first 15 lines of raw track data from the API
+                            st.subheader("First 15 lines of track data from ChartMetric API:")
+                            
+                            # Create a formatted display of the first 15 records
+                            data_sample = streaming_data[:15]
+                            
+                            # Create a table for better readability
+                            df_sample = pd.DataFrame([
+                                {
+                                    'Date': item.timestp,
+                                    'Value': item.value,
+                                    'Daily Diff': item.daily_diff,
+                                    'Interpolated': item.interpolated
+                                }
+                                for item in data_sample
+                            ])
+                            
+                            st.dataframe(df_sample)
+                            st.write(f"Total records: {len(streaming_data)}")
+                                
                             return streaming_data
                         except Exception as e:
                             st.error(f"Error fetching track streaming data: {str(e)}")
@@ -160,10 +184,15 @@ elif data_source == "ChartMetric API":
                         # Convert API data to DataFrame
                         df = pd.DataFrame(streaming_data)
                         
+                        # Debug: Show DataFrame at initial creation
+                        st.write("DEBUG - Initial DataFrame from API data:")
+                        st.write(df.head(3))
+                        st.write(f"Value column stats - Min: {df['value'].min()}, Max: {df['value'].max()}, Mean: {df['value'].mean():.2f}")
+                        
                         # Rename columns to match expected format
                         df = df.rename(columns={
                             'timestp': 'Date',
-                            'value': 'Value'
+                            'value': 'CumulativeStreams'
                         })
                         
                         # Get track details to get the name
@@ -179,16 +208,15 @@ elif data_source == "ChartMetric API":
                         # Convert date format from 'YYYY-MM-DD' to 'DD/MM/YYYY'
                         df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d/%m/%Y')
                         
-                        # Sort by date to ensure correct cumulative calculation
+                        # Sort by date to ensure correct order
                         df = df.sort_values('Date')
                         
-                        # Convert streaming data to cumulative streams if it's not already
-                        # Check if the values are already cumulative by seeing if they always increase
-                        is_cumulative = (df['Value'].diff().dropna() >= 0).all()
+                        # Debug: Show DataFrame after formatting
+                        st.write("DEBUG - Final DataFrame after formatting:")
+                        st.write(df.head(3))
+                        st.write(f"Value column stats - Min: {df['CumulativeStreams'].min()}, Max: {df['CumulativeStreams'].max()}, Mean: {df['CumulativeStreams'].mean():.2f}")
                         
-                        if not is_cumulative:
-                            # Convert to cumulative by calculating cumulative sum
-                            df['Value'] = df['Value'].cumsum()
+                        # ChartMetric API data is always cumulative - no need for conversion
                         
                         return df
 
@@ -197,8 +225,8 @@ elif data_source == "ChartMetric API":
                         # If data is None, return a default DataFrame
                         if geography_data is None:
                             default_data = [
-                                {"Country": "US", "Listeners": 100000},
-                                {"Country": "GB", "Listeners": 50000}
+                                {"Country": "United States", "Listeners": 100000},
+                                {"Country": "United Kingdom", "Listeners": 50000}
                             ]
                             st.warning("Using default country distribution - no geography data available")
                             return pd.DataFrame(default_data)
@@ -215,11 +243,18 @@ elif data_source == "ChartMetric API":
                         # Ensure we have the required columns
                         if 'Country' not in df.columns or 'Listeners' not in df.columns:
                             default_data = [
-                                {"Country": "US", "Listeners": 100000},
-                                {"Country": "GB", "Listeners": 50000}
+                                {"Country": "United States", "Listeners": 100000},
+                                {"Country": "United Kingdom", "Listeners": 50000}
                             ]
                             st.warning("Invalid data format. Using default country distribution.")
                             return pd.DataFrame(default_data)
+                        
+                        # Convert two-letter country codes to full country names
+                        df['Country'] = df['Country'].apply(country_code_to_name)
+                        
+                        # Debug output to verify country code conversion
+                        st.write("DEBUG - Audience geography after country code conversion:")
+                        st.write(df.head(5))
                         
                         return df
                     
@@ -241,8 +276,21 @@ elif data_source == "ChartMetric API":
                         
                         # Convert the streaming data to a BytesIO object to mimic a file upload
                         track_df = format_track_streaming_data(track_streaming_data, track_id)
+                        
+                        # Debug: Examine the DataFrame right before CSV conversion
+                        st.write("DEBUG - Track DataFrame before CSV conversion:")
+                        st.write(track_df.head(3))
+                        st.write(f"Shape: {track_df.shape}, Columns: {track_df.columns.tolist()}")
+                        
                         csv_string = track_df.to_csv(index=False)
                         catalog_file_data = io.BytesIO(csv_string.encode())
+                        
+                        # Debug: Check catalog file after it's been converted to CSV and back
+                        catalog_file_data_copy = io.BytesIO(csv_string.encode())
+                        st.write("DEBUG - Reading back the CSV data to verify:")
+                        catalog_df_check = pd.read_csv(catalog_file_data_copy)
+                        st.write(catalog_df_check.head(3))
+                        st.write(f"Value column stats - Min: {catalog_df_check['CumulativeStreams'].min()}, Max: {catalog_df_check['CumulativeStreams'].max()}, Mean: {catalog_df_check['CumulativeStreams'].mean():.2f}")
                         
                         # Format audience geography data
                         audience_geography_data = format_audience_geography(audience_geography)
