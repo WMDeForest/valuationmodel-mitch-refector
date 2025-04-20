@@ -184,12 +184,10 @@ class ChartMetricService(IChartmetricSDK):
         if 'limit' not in params:
             params['limit'] = 50
             
-        # If no date-related parameters are provided, default to a 10-year range
+        # If no date-related parameters are provided, default to a recent date before Aug 12, 2024
         if 'date' not in params and 'since' not in params and 'until' not in params and 'latest' not in params:
-            # Use 10 years ago for maximum historical data
-            ten_years_ago = (datetime.now() - timedelta(days=3650)).strftime('%Y-%m-%d')
-            params['since'] = ten_years_ago
-            # No need to specify 'until' - API defaults to today
+            # Use a date slightly before Aug 12, 2024 to get top 50 cities
+            params['since'] = '2024-08-11'
         
         response = self._client.request(
             url=CHARTMETRIC_API_ARTIST_WHERE_PEOPLE_LISTEN_URL(artist_id),
@@ -200,17 +198,52 @@ class ChartMetricService(IChartmetricSDK):
         response_json = json.loads(response)
         return response_json
 
-    def __create_artist_track_where_people_listen(
-        self, object: dict
-    ) -> list[CountryListeners]:
-        return [
-            CountryListeners(country_name=country, **entries[0])
-            for country, entries in object["countries"].items()
-        ]
+    def __create_artist_track_where_people_listen(self, object: dict) -> list:
+        try:
+            country_listeners = []
+            
+            # Extract countries data
+            if 'countries' in object:
+                countries_data = object['countries']
+                
+                # Process each country
+                for country, data_list in countries_data.items():
+                    if data_list and len(data_list) > 0:
+                        # Get the first entry for each country
+                        country_data = data_list[0]
+                        # Extract just code2 and listeners
+                        country_listeners.append({
+                            'code2': country_data.get('code2', country),
+                            'listeners': country_data.get('listeners', 0)
+                        })
+            
+            return country_listeners
+        except Exception as e:
+            # Log the error but don't crash
+            print(f"Error processing geography data: {str(e)}")
+            return []
 
-    def get_artist_track_where_people_listen(
-        self, artist_id: int = 0, params=None
-    ) -> list[CountryListeners]:
-        response = self.__get_artist_track_where_people_listen_request(artist_id, params)
-        response_obj = response["obj"]
-        return self.__create_artist_track_where_people_listen(response_obj)
+    def get_artist_track_where_people_listen(self, artist_id=0, params=None):
+        """
+        Get audience geography data for an artist
+        
+        Parameters:
+        -----------
+        artist_id : int
+            ChartMetric artist ID
+        params : dict, optional
+            Additional parameters to pass to the API
+            
+        Returns:
+        --------
+        list
+            Simplified list of country data with code2 and listeners
+        """
+        try:
+            response = self.__get_artist_track_where_people_listen_request(artist_id, params)
+            response_obj = response["obj"]
+            return self.__create_artist_track_where_people_listen(response_obj)
+        except Exception as e:
+            # Return empty list on error
+            print(f"Error in get_artist_track_where_people_listen: {str(e)}")
+            return []

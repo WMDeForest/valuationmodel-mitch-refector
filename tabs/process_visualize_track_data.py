@@ -239,8 +239,8 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
     # The default of 4.5% represents a moderate risk profile for music royalty assets
     discount_rate = display_financial_parameters_ui()
 
-    # ===== RUN BUTTON =====
-    if st.button('Run All'):
+    # ===== CALCULATE VALUATION BUTTON =====
+    if st.button('Calculate Valuation'):
         # Load required global datasets
         population_df = get_population_data()
         mechanical_royalty_rates_df = get_mech_data()
