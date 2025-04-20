@@ -162,20 +162,31 @@ elif data_source == "ChartMetric API":
                             st.error(f"Error fetching audience geography data: {str(e)}")
                             return None
 
+                    # Standardized date conversion function to avoid redundancy
+                    def convert_date_format(df, date_column='timestp'):
+                        """Standardized date conversion to consistent format"""
+                        # First ensure dates are in datetime format for proper sorting
+                        df[date_column] = pd.to_datetime(df[date_column])
+                        # Sort by the datetime column
+                        df = df.sort_values(date_column)
+                        # Then convert to required string format after sorting
+                        df[date_column] = df[date_column].dt.strftime('%d/%m/%Y')
+                        return df
+
                     # Formatting functions
                     def format_artist_monthly_listeners(monthly_listeners_data):
                         """Format artist monthly listeners data to match expected format"""
                         # Convert API data to DataFrame
                         df = pd.DataFrame(monthly_listeners_data)
                         
+                        # Sort and convert dates first
+                        df = convert_date_format(df)
+                        
                         # Rename columns to match expected format
                         df = df.rename(columns={
                             'timestp': 'Date',
                             'value': 'Monthly Listeners'
                         })
-                        
-                        # Convert date format from 'YYYY-MM-DD' to 'DD/MM/YYYY'
-                        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d/%m/%Y')
                         
                         return df
 
@@ -188,6 +199,9 @@ elif data_source == "ChartMetric API":
                         st.write("DEBUG - Initial DataFrame from API data:")
                         st.write(df.head(3))
                         st.write(f"Value column stats - Min: {df['value'].min()}, Max: {df['value'].max()}, Mean: {df['value'].mean():.2f}")
+                        
+                        # Sort and convert dates first
+                        df = convert_date_format(df)
                         
                         # Rename columns to match expected format
                         df = df.rename(columns={
@@ -205,18 +219,10 @@ elif data_source == "ChartMetric API":
                         # Add track name column
                         df['Track Name'] = track_name
                         
-                        # Convert date format from 'YYYY-MM-DD' to 'DD/MM/YYYY'
-                        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%d/%m/%Y')
-                        
-                        # Sort by date to ensure correct order
-                        df = df.sort_values('Date')
-                        
                         # Debug: Show DataFrame after formatting
                         st.write("DEBUG - Final DataFrame after formatting:")
                         st.write(df.head(3))
                         st.write(f"Value column stats - Min: {df['CumulativeStreams'].min()}, Max: {df['CumulativeStreams'].max()}, Mean: {df['CumulativeStreams'].mean():.2f}")
-                        
-                        # ChartMetric API data is always cumulative - no need for conversion
                         
                         return df
 
@@ -273,56 +279,27 @@ elif data_source == "ChartMetric API":
                     else:
                         # Convert data into the format expected by process_and_visualize_track_data
                         artist_monthly_listeners_df = format_artist_monthly_listeners(artist_monthly_listeners)
-                        
-                        # Convert the streaming data to a BytesIO object to mimic a file upload
                         track_df = format_track_streaming_data(track_streaming_data, track_id)
+                        audience_geography_df = format_audience_geography(audience_geography)
                         
-                        # Debug: Examine the DataFrame right before CSV conversion
-                        st.write("DEBUG - Track DataFrame before CSV conversion:")
+                        # Debug: Examine the DataFrame before processing
+                        st.write("DEBUG - Track DataFrame before processing:")
                         st.write(track_df.head(3))
                         st.write(f"Shape: {track_df.shape}, Columns: {track_df.columns.tolist()}")
                         
-                        csv_string = track_df.to_csv(index=False)
-                        catalog_file_data = io.BytesIO(csv_string.encode())
+                        # Store formatted DataFrames directly in session state
+                        st.session_state.artist_monthly_listeners_df = artist_monthly_listeners_df
+                        st.session_state.catalog_df = track_df
+                        st.session_state.audience_geo_df = audience_geography_df
                         
-                        # Debug: Check catalog file after it's been converted to CSV and back
-                        catalog_file_data_copy = io.BytesIO(csv_string.encode())
-                        st.write("DEBUG - Reading back the CSV data to verify:")
-                        catalog_df_check = pd.read_csv(catalog_file_data_copy)
-                        st.write(catalog_df_check.head(3))
-                        st.write(f"Value column stats - Min: {catalog_df_check['CumulativeStreams'].min()}, Max: {catalog_df_check['CumulativeStreams'].max()}, Mean: {catalog_df_check['CumulativeStreams'].mean():.2f}")
+                        # For processing, convert DataFrame to BytesIO only when needed
+                        catalog_file_data = io.BytesIO(track_df.to_csv(index=False).encode())
                         
-                        # Format audience geography data
-                        audience_geography_data = format_audience_geography(audience_geography)
-                        
-                        # Convert audience_geography_data to BytesIO if needed
-                        if isinstance(audience_geography_data, pd.DataFrame):
-                            geo_csv_string = audience_geography_data.to_csv(index=False)
-                            audience_geography_data = io.BytesIO(geo_csv_string.encode())
+                        if isinstance(audience_geography_df, pd.DataFrame):
+                            audience_geography_data = io.BytesIO(audience_geography_df.to_csv(index=False).encode())
                         
                         # Get track name for display
-                        try:
-                            track_details = chartmetric.get_track_detail(track_id=int(track_id))
-                            track_name = track_details.name if hasattr(track_details, 'name') else f"Track ID: {track_id}"
-                        except Exception:
-                            track_name = f"Track ID: {track_id}"
-                        
-                        # Store data in session state to persist between reruns
-                        st.session_state.artist_monthly_listeners_df = artist_monthly_listeners_df
-                        
-                        # We need to convert BytesIO to DataFrame for session state storage
-                        if catalog_file_data:
-                            # Reset pointer to start of file
-                            catalog_file_data.seek(0)
-                            catalog_df = pd.read_csv(catalog_file_data)
-                            st.session_state.catalog_df = catalog_df
-                        
-                        if isinstance(audience_geography_data, io.BytesIO):
-                            audience_geography_data.seek(0)
-                            audience_geo_df = pd.read_csv(audience_geography_data)
-                            st.session_state.audience_geo_df = audience_geo_df
-                        elif isinstance(audience_geography_data, pd.DataFrame):
-                            st.session_state.audience_geo_df = audience_geography_data
+                        track_name = track_df['Track Name'].iloc[0] if 'Track Name' in track_df.columns else f"Track ID: {track_id}"
                         
                         # Set flag to indicate data is ready
                         st.session_state.chartmetric_data_ready = True
@@ -341,16 +318,13 @@ elif data_source == "ChartMetric API":
             artist_monthly_listeners_df = st.session_state.artist_monthly_listeners_df
         
         if 'catalog_df' in st.session_state:
-            # Convert DataFrame back to BytesIO for processing
+            # Convert DataFrame to BytesIO only when needed for processing
             catalog_df = st.session_state.catalog_df
-            csv_string = catalog_df.to_csv(index=False)
-            catalog_file_data = io.BytesIO(csv_string.encode())
+            catalog_file_data = io.BytesIO(catalog_df.to_csv(index=False).encode())
         
         if 'audience_geo_df' in st.session_state:
             audience_geo_df = st.session_state.audience_geo_df
-            # Convert DataFrame to BytesIO if needed by downstream code
-            geo_csv_string = audience_geo_df.to_csv(index=False)
-            audience_geography_data = io.BytesIO(geo_csv_string.encode())
+            audience_geography_data = io.BytesIO(audience_geo_df.to_csv(index=False).encode())
         
         # Set analysis ready flag
         analysis_ready = True
