@@ -405,17 +405,50 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
             # For older tracks, use the valuation cutoff date
             # For newer tracks, use the latest available data
             
-            # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for mechanical royalty rate comparison
-            earliest_track_date_formatted = datetime.strptime(forecast_result['earliest_track_date'], "%d/%m/%Y").strftime('%Y-%m')
+            # Check if there's an actual release date from API in the session state
+            actual_release_date = None
+            if 'track_release_date' in st.session_state:
+                actual_release_date = st.session_state.track_release_date
             
-            if earliest_track_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
+            # Use actual release date if available, otherwise use earliest track date from data
+            date_to_use = actual_release_date if actual_release_date else forecast_result['earliest_track_date']
+            
+            # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for mechanical royalty rate comparison
+            start_date_formatted = datetime.strptime(date_to_use, "%d/%m/%Y").strftime('%Y-%m')
+            
+            if start_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
                 royalty_calculation_end_date = mechanical_royalty_rates_df['Date'].max()
             else:
                 royalty_calculation_end_date = HISTORICAL_VALUATION_CUTOFF
                 
             # Filter mechanical royalty data for relevant date range
             # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
-            mask = (mechanical_royalty_rates_df['Date'] >= earliest_track_date_formatted) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
+            mask = (mechanical_royalty_rates_df['Date'] >= start_date_formatted) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
+            
+            # ===== DIAGNOSTIC INFORMATION FOR HISTORICAL VALUE CALCULATION =====
+            st.write("----------------------------------------------------")
+            st.write(f"💡 Historical Value Calculation Inputs for '{selected_song}':")
+            st.write(f"  • Total Historical Streams: {forecast_result['total_historical_track_streams']:,}")
+            st.write(f"  • Track Release Date (from data): {forecast_result['earliest_track_date']}")
+            
+            # Display actual release date if available
+            if actual_release_date:
+                st.write(f"  • Actual Release Date from API: {actual_release_date}")
+                st.write(f"  • Using actual release date for calculations")
+            
+            st.write(f"  • Royalty Date Range: {start_date_formatted} to {royalty_calculation_end_date}")
+            st.write(f"  • Listener Percentage USA: {listener_percentage_usa:.2%}")
+            st.write(f"  • Premium Stream Percentage: {PREMIUM_STREAM_PERCENTAGE:.0%}")
+            st.write(f"  • Ad-Supported Stream Percentage: {AD_SUPPORTED_STREAM_PERCENTAGE:.0%}")
+            st.write(f"  • Time Value Adjustment: {HISTORICAL_VALUE_TIME_ADJUSTMENT} months")
+            st.write(f"  • Discount Rate: {discount_rate:.2%}")
+            
+            # Calculate average royalty rates for the date range
+            avg_ad_supported_rate = mechanical_royalty_rates_df.loc[mask, 'Spotify_Ad-supported'].mean()
+            avg_premium_rate = mechanical_royalty_rates_df.loc[mask, 'Spotify_Premium'].mean()
+            st.write(f"  • Avg Spotify Ad-Supported Royalty Rate: ${avg_ad_supported_rate:.6f}")
+            st.write(f"  • Avg Spotify Premium Royalty Rate: ${avg_premium_rate:.6f}")
+            st.write("----------------------------------------------------")
             
             # Calculate historical royalty value using our dedicated function
             historical_royalty_value_time_adjusted = calculate_historical_royalty_revenue(
@@ -426,8 +459,14 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
                 discount_rate=discount_rate,
                 historical_value_time_adjustment=HISTORICAL_VALUE_TIME_ADJUSTMENT,
                 premium_stream_percentage=PREMIUM_STREAM_PERCENTAGE,
-                ad_supported_stream_percentage=AD_SUPPORTED_STREAM_PERCENTAGE
+                ad_supported_stream_percentage=AD_SUPPORTED_STREAM_PERCENTAGE,
+                actual_release_date=actual_release_date,
+                earliest_track_date=forecast_result['earliest_track_date']
             )
+            
+            # Show calculated historical value
+            st.write(f"📊 Calculated Historical Value: ${int(historical_royalty_value_time_adjusted):,}")
+            st.write("----------------------------------------------------")
 
             # ===== 9. PREPARE MONTHLY FORECAST DATA =====
             # Use utility function to create projections DataFrame and apply geographic distribution

@@ -16,7 +16,9 @@ def calculate_historical_royalty_revenue(
     discount_rate,
     historical_value_time_adjustment,
     premium_stream_percentage=0.4,
-    ad_supported_stream_percentage=0.6
+    ad_supported_stream_percentage=0.6,
+    actual_release_date=None,
+    earliest_track_date=None
 ):
     """
     Calculate the historical royalty revenue of a track based on its past streaming data.
@@ -35,6 +37,7 @@ def calculate_historical_royalty_revenue(
         DataFrame containing historical mechanical royalty rates
     date_range_mask : pandas.Series
         Boolean mask for filtering the royalty rates DataFrame to the relevant date range
+        Note: If actual_release_date is provided, this mask will be recalculated
     listener_percentage_usa : float
         Percentage (0-1) of streams coming from USA listeners
     discount_rate : float
@@ -45,12 +48,34 @@ def calculate_historical_royalty_revenue(
         Percentage (0-1) of streams from premium subscribers (default: 0.4)
     ad_supported_stream_percentage : float, optional
         Percentage (0-1) of streams from ad-supported users (default: 0.6)
+    actual_release_date : str, optional
+        The actual release date of the track in 'DD/MM/YYYY' format
+        If provided, this will be used instead of the earliest_track_date for royalty calculations
+    earliest_track_date : str, optional
+        The earliest date in the streaming data in 'DD/MM/YYYY' format
         
     Returns
     -------
     float
         The calculated historical royalty revenue with time value adjustment applied
     """
+    # If actual_release_date is provided, recalculate the date_range_mask
+    if actual_release_date and mechanical_royalty_rates_df is not None:
+        import datetime
+        
+        # Convert the actual release date to the format used in the royalty rates DataFrame
+        actual_release_date_formatted = datetime.datetime.strptime(actual_release_date, "%d/%m/%Y").strftime('%Y-%m')
+        
+        # Define the end date for the calculation
+        royalty_calculation_end_date = HISTORICAL_VALUATION_CUTOFF
+        
+        # For newer tracks, use the latest available data
+        if actual_release_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
+            royalty_calculation_end_date = mechanical_royalty_rates_df['Date'].max()
+            
+        # Create a new mask with the actual release date
+        date_range_mask = (mechanical_royalty_rates_df['Date'] >= actual_release_date_formatted) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
+    
     # Calculate average royalty rates for the specified date range
     avg_spotify_ad_supported_royalty_rate = mechanical_royalty_rates_df.loc[date_range_mask, 'Spotify_Ad-supported'].mean()
     avg_spotify_premium_royalty_rate = mechanical_royalty_rates_df.loc[date_range_mask, 'Spotify_Premium'].mean()

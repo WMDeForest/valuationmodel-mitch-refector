@@ -251,11 +251,11 @@ def format_track_streaming_data(streaming_data, track_id):
     
     # Convert streaming data to cumulative streams if it's not already
     # Check if the values are already cumulative by seeing if they always increase
-    is_cumulative = (df['Value'].diff().dropna() >= 0).all()
+    is_cumulative = (df['CumulativeStreams'].diff().dropna() >= 0).all()
     
     if not is_cumulative:
         # Convert to cumulative by calculating cumulative sum
-        df['Value'] = df['Value'].cumsum()
+        df['CumulativeStreams'] = df['CumulativeStreams'].cumsum()
     
     return df
 

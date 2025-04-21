@@ -351,17 +351,23 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
             # For older tracks, use the valuation cutoff date
             # For newer tracks, use the latest available data
             
-            # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for mechanical royalty rate comparison
-            earliest_track_date_formatted = datetime.strptime(forecast_result['earliest_track_date'], "%d/%m/%Y").strftime('%Y-%m')
+            # Check if there's an actual release date from API in the session state
+            actual_release_date = st.session_state.get('track_release_date')
             
-            if earliest_track_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
+            # Use actual release date if available, otherwise use earliest track date from data
+            date_to_use = actual_release_date if actual_release_date else forecast_result['earliest_track_date']
+            
+            # Convert date from "DD/MM/YYYY" to "YYYY-MM" format for mechanical royalty rate comparison
+            start_date_formatted = datetime.strptime(date_to_use, "%d/%m/%Y").strftime('%Y-%m')
+            
+            if start_date_formatted >= HISTORICAL_VALUATION_CUTOFF:
                 royalty_calculation_end_date = mechanical_royalty_rates_df['Date'].max()
             else:
                 royalty_calculation_end_date = HISTORICAL_VALUATION_CUTOFF
                 
             # Filter mechanical royalty data for relevant date range
             # Note: MECHv2_fixed.csv dates are already in 'YYYY-MM' format, so no conversion needed
-            mask = (mechanical_royalty_rates_df['Date'] >= earliest_track_date_formatted) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
+            mask = (mechanical_royalty_rates_df['Date'] >= start_date_formatted) & (mechanical_royalty_rates_df['Date'] <= royalty_calculation_end_date)
             
             # Calculate historical royalty value using our dedicated function
             historical_royalty_value_time_adjusted = calculate_historical_royalty_revenue(
@@ -372,7 +378,9 @@ def process_and_visualize_track_data(artist_monthly_listeners_df=None, catalog_f
                 discount_rate=discount_rate,
                 historical_value_time_adjustment=HISTORICAL_VALUE_TIME_ADJUSTMENT,
                 premium_stream_percentage=PREMIUM_STREAM_PERCENTAGE,
-                ad_supported_stream_percentage=AD_SUPPORTED_STREAM_PERCENTAGE
+                ad_supported_stream_percentage=AD_SUPPORTED_STREAM_PERCENTAGE,
+                actual_release_date=actual_release_date,
+                earliest_track_date=forecast_result['earliest_track_date']
             )
 
             # ===== 9. PREPARE MONTHLY FORECAST DATA =====

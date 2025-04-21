@@ -209,12 +209,33 @@ elif data_source == "ChartMetric API":
                             'value': 'CumulativeStreams'
                         })
                         
-                        # Get track details to get the name
+                        # Get track details to get the name and release date
+                        track_release_date = None
                         try:
                             track_details = chartmetric.get_track_detail(track_id=int(track_id))
-                            track_name = track_details.name if hasattr(track_details, 'name') else f"Track ID: {track_id}"
-                        except:
+                            track_name = track_details.name
+                            
+                            # Store the track ID in session state
+                            st.session_state.current_chartmetric_track_id = track_id
+                            
+                            # Get and store the actual release date if available
+                            if track_details.release_date:
+                                # Store the original API release date
+                                release_date = track_details.release_date
+                                
+                                # Format for our application (DD/MM/YYYY)
+                                release_date_dt = pd.to_datetime(release_date)
+                                track_release_date = release_date_dt.strftime("%d/%m/%Y")
+                                
+                                # Store in session state for historical value calculation
+                                st.session_state.track_release_date = track_release_date
+                                
+                                # Log for debugging
+                                st.write(f"Track release date from API: {release_date} (formatted: {track_release_date})")
+                                
+                        except Exception as e:
                             track_name = f"Track ID: {track_id}"
+                            st.warning(f"Could not fetch complete track details: {str(e)}")
                         
                         # Add track name column
                         df['Track Name'] = track_name
@@ -287,16 +308,85 @@ elif data_source == "ChartMetric API":
                         st.write(track_df.head(3))
                         st.write(f"Shape: {track_df.shape}, Columns: {track_df.columns.tolist()}")
                         
+                        # Add more diagnostic data to match CSV display for comparison
+                        st.write("----------------------------------------------------")
+                        st.write("🔍 CHARTMETRIC API DATA DIAGNOSTIC INFO:")
+                        st.write(f"  • Track Name: {track_df['Track Name'].iloc[0] if 'Track Name' in track_df.columns else 'Unknown'}")
+                        st.write(f"  • Total Historical Streams: {track_df['CumulativeStreams'].iloc[-1]:,}")
+                        
+                        # Show both release date and earliest data date
+                        try:
+                            track_details = chartmetric.get_track_detail(track_id=int(track_id))
+                            if track_details.release_date:
+                                release_date = track_details.release_date
+                                st.write(f"  • Actual Track Release Date (API): {release_date}")
+                        except Exception as e:
+                            pass
+                            
+                        st.write(f"  • Earliest Data Date (in dataset): {track_df['Date'].iloc[0]}")
+                        
+                        # Show audience geography info
+                        if isinstance(audience_geography_df, pd.DataFrame) and not audience_geography_df.empty:
+                            total_listeners = audience_geography_df['Listeners'].sum()
+                            us_listeners = audience_geography_df[audience_geography_df['Country'] == 'United States']['Listeners'].sum() if 'United States' in audience_geography_df['Country'].values else 0
+                            us_percentage = (us_listeners / total_listeners) if total_listeners > 0 else 0
+                            st.write(f"  • US Listener Percentage: {us_percentage:.2%}")
+                            st.write(f"  • Total Countries: {len(audience_geography_df)}")
+                        else:
+                            st.write("  • No audience geography data available, using default US distribution")
+                        st.write("----------------------------------------------------")
+                        
                         # Store formatted DataFrames directly in session state
                         st.session_state.artist_monthly_listeners_df = artist_monthly_listeners_df
                         st.session_state.catalog_df = track_df
                         st.session_state.audience_geo_df = audience_geography_df
+                        
+                        # Log what's in session state for debugging
+                        st.write("---")
+                        st.write("📊 SESSION STATE DATA STORED FOR VALUATION:")
+                        st.write(f"• Track ID: {st.session_state.get('current_chartmetric_track_id')}")
+                        
+                        # List all release date keys
+                        release_date_keys = [key for key in st.session_state.keys() if key.startswith('track_release_date_')]
+                        for key in release_date_keys:
+                            st.write(f"• {key}: {st.session_state[key]}")
+                        st.write("---")
                         
                         # For processing, convert DataFrame to BytesIO only when needed
                         catalog_file_data = io.BytesIO(track_df.to_csv(index=False).encode())
                         
                         if isinstance(audience_geography_df, pd.DataFrame):
                             audience_geography_data = io.BytesIO(audience_geography_df.to_csv(index=False).encode())
+                        
+                        # Pass a custom data processor that will override the earliest_track_date
+                        # when extract_track_metrics is called
+                        def custom_extract_track_metrics(track_data_df, track_name=None):
+                            """Custom wrapper for extract_track_metrics that uses the actual release date"""
+                            from utils.data_processing import extract_track_metrics as original_extract_track_metrics
+                            
+                            # Get the original metrics
+                            metrics = original_extract_track_metrics(track_data_df, track_name)
+                            
+                            # Get track ID from session state (set during API data fetch)
+                            track_id = st.session_state.get('current_chartmetric_track_id')
+                            
+                            if track_id:
+                                release_date_key = f"track_release_date_{track_id}"
+                                
+                                # If we have a corresponding release date, use it
+                                if release_date_key in st.session_state:
+                                    release_date = st.session_state[release_date_key]
+                                    st.write(f"Overriding earliest track date from {metrics['earliest_track_date']} to {release_date} (using stored release date)")
+                                    metrics['earliest_track_date'] = release_date
+                                    
+                                    # Recalculate months_since_release_total based on the new date
+                                    from utils.data_processing import calculate_months_since_release
+                                    metrics['months_since_release_total'] = calculate_months_since_release(release_date)
+                            
+                            return metrics
+                        
+                        # Store the custom function in session state
+                        st.session_state.custom_extract_track_metrics = custom_extract_track_metrics
                         
                         # Get track name for display
                         track_name = track_df['Track Name'].iloc[0] if 'Track Name' in track_df.columns else f"Track ID: {track_id}"
@@ -335,12 +425,33 @@ if analysis_ready:
     st.header("Analysis")
     
     # Automatically run the analysis when data is ready
-    process_and_visualize_track_data(
-        artist_monthly_listeners_df=artist_monthly_listeners_df,
-        catalog_file_data=catalog_file_data,
-        audience_geography_data=audience_geography_data,
-        ownership_data=ownership_data
-    )
+    if data_source == "ChartMetric API" and 'custom_extract_track_metrics' in st.session_state:
+        # Use our custom function that will override the earliest track date with the real release date
+        from utils.data_processing import extract_track_metrics
+        
+        # Temporarily replace the extract_track_metrics function with our custom one
+        import utils.data_processing
+        original_extract_track_metrics = utils.data_processing.extract_track_metrics
+        utils.data_processing.extract_track_metrics = st.session_state.custom_extract_track_metrics
+        
+        # Process with our modified function
+        process_and_visualize_track_data(
+            artist_monthly_listeners_df=artist_monthly_listeners_df,
+            catalog_file_data=catalog_file_data,
+            audience_geography_data=audience_geography_data,
+            ownership_data=ownership_data
+        )
+        
+        # Restore the original function
+        utils.data_processing.extract_track_metrics = original_extract_track_metrics
+    else:
+        # Use the standard function for CSV data
+        process_and_visualize_track_data(
+            artist_monthly_listeners_df=artist_monthly_listeners_df,
+            catalog_file_data=catalog_file_data,
+            audience_geography_data=audience_geography_data,
+            ownership_data=ownership_data
+        )
 else:
     # If not ready for analysis, show a message
     if data_source == "CSV Upload":
