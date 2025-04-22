@@ -198,30 +198,28 @@ class ChartMetricService(IChartmetricSDK):
         response_json = json.loads(response)
         return response_json
 
-    def __create_artist_track_where_people_listen(self, object: dict) -> list:
+    def __create_artist_track_where_people_listen(self, object: dict) -> dict:
+        """
+        Process the artist geography data from the API
+        
+        Parameters:
+        -----------
+        object : dict
+            The API response object
+            
+        Returns:
+        --------
+        dict
+            Complete geography data with both cities and countries
+        """
         try:
-            country_listeners = []
-            
-            # Extract countries data
-            if 'countries' in object:
-                countries_data = object['countries']
-                
-                # Process each country
-                for country, data_list in countries_data.items():
-                    if data_list and len(data_list) > 0:
-                        # Get the first entry for each country
-                        country_data = data_list[0]
-                        # Extract just code2 and listeners
-                        country_listeners.append({
-                            'code2': country_data.get('code2', country),
-                            'listeners': country_data.get('listeners', 0)
-                        })
-            
-            return country_listeners
+            # Simply return the raw object which includes both cities and countries
+            # This preserves the full data structure needed by our display functions
+            return object
         except Exception as e:
             # Log the error but don't crash
             print(f"Error processing geography data: {str(e)}")
-            return []
+            return {"cities": {}, "countries": {}}
 
     def get_artist_track_where_people_listen(self, artist_id=0, params=None):
         """
@@ -236,14 +234,14 @@ class ChartMetricService(IChartmetricSDK):
             
         Returns:
         --------
-        list
-            Simplified list of country data with code2 and listeners
+        dict
+            Complete geography data with both cities and countries
         """
         try:
             response = self.__get_artist_track_where_people_listen_request(artist_id, params)
             response_obj = response["obj"]
             return self.__create_artist_track_where_people_listen(response_obj)
         except Exception as e:
-            # Return empty list on error
+            # Return empty dict on error
             print(f"Error in get_artist_track_where_people_listen: {str(e)}")
-            return []
+            return {"cities": {}, "countries": {}}
