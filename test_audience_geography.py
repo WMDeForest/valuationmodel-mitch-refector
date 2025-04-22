@@ -39,11 +39,19 @@ def display_data_section(response_data, title):
         st.json(response_data)
 
     try:
-        # Extract the obj containing cities and countries
-        data = response_data.get('obj', {}) if isinstance(response_data, dict) else {}
+        # Determine if we have the obj directly or need to extract it
+        if isinstance(response_data, dict):
+            # Check if this is already the obj data (has cities/countries directly)
+            if 'cities' in response_data or 'countries' in response_data:
+                data = response_data
+            else:
+                # Otherwise try to extract obj from response
+                data = response_data.get('obj', {})
+        else:
+            data = {}
         
         if not data:
-            st.error("No 'obj' data found in the API response")
+            st.error("No data found in the API response")
             return
             
         # Check if cities and countries exist

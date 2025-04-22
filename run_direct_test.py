@@ -47,10 +47,10 @@ def test_api_call(artist_id, access_token):
     }
     
     url = f"https://api.chartmetric.com/api/artist/{artist_id}/where-people-listen"
-    params = {"latest": "true"}
+    params = {"date": "2024-08-12"}
     
     print(f"\nTesting artist ID: {artist_id}")
-    print(f"URL: {url}?latest=true")
+    print(f"URL: {url}?date=2024-08-12")
     
     # Make the direct API call
     response = requests.get(url, headers=headers, params=params)
@@ -62,28 +62,20 @@ def test_api_call(artist_id, access_token):
         # Parse JSON response
         data = response.json()
         
-        # Check for cities and countries
+        # Check for cities data only
         if 'obj' in data:
             obj = data['obj']
             
             if 'cities' in obj and obj['cities']:
                 cities = obj['cities']
                 print(f"Cities: Found data for {len(cities)} cities")
-                # Print some sample city names
-                city_names = list(cities.keys())[:5]  # First 5 cities
-                print(f"Sample cities: {', '.join(city_names)}")
+                # Print all city data
+                print("All cities data:")
+                for city, data in cities.items():
+                    print(f"  {city}: {data}")
             else:
                 print("Cities: None found in response")
                 
-            if 'countries' in obj and obj['countries']:
-                countries = obj['countries']
-                print(f"Countries: Found data for {len(countries)} countries")
-                # Print some sample country names
-                country_names = list(countries.keys())[:5]  # First 5 countries
-                print(f"Sample countries: {', '.join(country_names)}")
-            else:
-                print("Countries: None found in response")
-            
             # Save response to file for inspection
             filename = f"artist_{artist_id}_response.json"
             with open(filename, "w") as f:
