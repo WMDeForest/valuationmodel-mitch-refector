@@ -180,14 +180,14 @@ class ChartMetricService(IChartmetricSDK):
         if params is None:
             params = {}
         
-        # Ensure limit is set to 50 if not specified
+        # Ensure limit is set to 50 if not specified 
         if 'limit' not in params:
             params['limit'] = 50
             
-        # If no date-related parameters are provided, default to a recent date before Aug 12, 2024
+        # If no date-related parameters are provided, default to a specific date (August 12th, 2024)
         if 'date' not in params and 'since' not in params and 'until' not in params and 'latest' not in params:
-            # Use a date slightly before Aug 12, 2024 to get top 50 cities
-            params['since'] = '2024-08-11'
+            # Use a specific date to get consistent city data
+            params['date'] = '2024-08-12'
         
         response = self._client.request(
             url=CHARTMETRIC_API_ARTIST_WHERE_PEOPLE_LISTEN_URL(artist_id),
@@ -200,7 +200,7 @@ class ChartMetricService(IChartmetricSDK):
 
     def __create_artist_track_where_people_listen(self, object: dict) -> dict:
         """
-        Process the artist geography data from the API
+        Process the artist geography data from the API, focusing on city data
         
         Parameters:
         -----------
@@ -210,16 +210,27 @@ class ChartMetricService(IChartmetricSDK):
         Returns:
         --------
         dict
-            Complete geography data with both cities and countries
+            Geography data focusing on cities
         """
         try:
-            # Simply return the raw object which includes both cities and countries
-            # This preserves the full data structure needed by our display functions
-            return object
+            # Extract only city data from the response
+            if 'cities' in object and object['cities']:
+                cities_data = []
+                for city, data_list in object['cities'].items():
+                    for city_data in data_list:
+                        if 'listeners' in city_data and 'code2' in city_data:
+                            # Add the city name to each data point for clarity
+                            city_data['city'] = city
+                            cities_data.append(city_data)
+                
+                # Return a list of dictionaries with city data
+                return cities_data
+            else:
+                return []
         except Exception as e:
             # Log the error but don't crash
             print(f"Error processing geography data: {str(e)}")
-            return {"cities": {}, "countries": {}}
+            return []
 
     def get_artist_track_where_people_listen(self, artist_id=0, params=None):
         """
@@ -234,14 +245,21 @@ class ChartMetricService(IChartmetricSDK):
             
         Returns:
         --------
-        dict
-            Complete geography data with both cities and countries
+        list or None
+            City-based geography data or None if an error occurs
         """
         try:
             response = self.__get_artist_track_where_people_listen_request(artist_id, params)
             response_obj = response["obj"]
-            return self.__create_artist_track_where_people_listen(response_obj)
+            result = self.__create_artist_track_where_people_listen(response_obj)
+            
+            # If we got empty results, return None instead
+            if not result or len(result) == 0:
+                print(f"No geography data found for artist ID: {artist_id}")
+                return None
+                
+            return result
         except Exception as e:
-            # Return empty dict on error
+            # Return None on error
             print(f"Error in get_artist_track_where_people_listen: {str(e)}")
-            return {"cities": {}, "countries": {}}
+            return None

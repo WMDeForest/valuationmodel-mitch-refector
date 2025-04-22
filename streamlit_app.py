@@ -141,9 +141,9 @@ elif data_source == "ChartMetric API":
                         try:
                             # Create params dictionary with required parameters
                             params = {
-                                # Use a date from before Aug 12, 2024 to get top 50 cities
-                                'since': '2024-08-11',
-                                # Get maximum countries
+                                # Use a specific date for consistent data
+                                'date': '2024-08-12',
+                                # Get maximum cities
                                 'limit': 50
                             }
                             
@@ -156,7 +156,7 @@ elif data_source == "ChartMetric API":
                             if geography_data and len(geography_data) > 0:
                                 return geography_data
                             else:
-                                st.warning("No country data found in the API response")
+                                st.warning("No city data found in the API response")
                                 return None
                         except Exception as e:
                             st.error(f"Error fetching audience geography data: {str(e)}")
@@ -249,41 +249,40 @@ elif data_source == "ChartMetric API":
 
                     def format_audience_geography(geography_data):
                         """Format audience geography data to match expected format"""
-                        # If data is None, return a default DataFrame
+                        # If data is None, return an error instead of default data
                         if geography_data is None:
-                            default_data = [
-                                {"Country": "United States", "Listeners": 100000},
-                                {"Country": "United Kingdom", "Listeners": 50000}
-                            ]
-                            st.warning("Using default country distribution - no geography data available")
-                            return pd.DataFrame(default_data)
+                            st.error("No geography data available. Please check the artist ID or try a different date.")
+                            return None
                         
                         # Convert the list of dictionaries to DataFrame
                         df = pd.DataFrame(geography_data)
                         
+                        # Show the raw city data for debugging
+                        st.write("DEBUG - Raw city data from API:")
+                        st.write(df.head(5))
+                        
+                        # Group by country code and sum listeners to aggregate at country level
+                        country_df = df.groupby('code2')['listeners'].sum().reset_index()
+                        
                         # Rename columns to match expected format
-                        df = df.rename(columns={
+                        country_df = country_df.rename(columns={
                             'code2': 'Country',
                             'listeners': 'Listeners'
                         })
                         
                         # Ensure we have the required columns
-                        if 'Country' not in df.columns or 'Listeners' not in df.columns:
-                            default_data = [
-                                {"Country": "United States", "Listeners": 100000},
-                                {"Country": "United Kingdom", "Listeners": 50000}
-                            ]
-                            st.warning("Invalid data format. Using default country distribution.")
-                            return pd.DataFrame(default_data)
+                        if 'Country' not in country_df.columns or 'Listeners' not in country_df.columns:
+                            st.error("Invalid data format. Missing required Country or Listeners columns.")
+                            return None
                         
                         # Convert two-letter country codes to full country names
-                        df['Country'] = df['Country'].apply(country_code_to_name)
+                        country_df['Country'] = country_df['Country'].apply(country_code_to_name)
                         
                         # Debug output to verify country code conversion
                         st.write("DEBUG - Audience geography after country code conversion:")
-                        st.write(df.head(5))
+                        st.write(country_df.head(5))
                         
-                        return df
+                        return country_df
                     
                     # 1. Get artist monthly listeners data
                     artist_monthly_listeners = fetch_artist_monthly_listeners(artist_id)
@@ -302,6 +301,11 @@ elif data_source == "ChartMetric API":
                         artist_monthly_listeners_df = format_artist_monthly_listeners(artist_monthly_listeners)
                         track_df = format_track_streaming_data(track_streaming_data, track_id)
                         audience_geography_df = format_audience_geography(audience_geography)
+                        
+                        # Check if audience geography data is missing
+                        if audience_geography_df is None:
+                            st.error("Audience geography data is required but missing or invalid.")
+                            st.stop()
                         
                         # Debug: Examine the DataFrame before processing
                         st.write("DEBUG - Track DataFrame before processing:")
