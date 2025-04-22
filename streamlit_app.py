@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import io
 
 # Import core functionality
-from tabs.process_visualize_track_data import process_and_visualize_track_data
+from utils.process_visualize_track_data import process_and_visualize_track_data
 
 # Import ChartMetric service
 from services.chartmetric_services import chartmetric_service as chartmetric
