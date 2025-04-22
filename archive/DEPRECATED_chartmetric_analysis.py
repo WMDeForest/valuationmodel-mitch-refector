@@ -1,3 +1,11 @@
+"""
+DEPRECATED: This module is no longer in use as of April 2024.
+The ChartMetric analysis functionality has been moved directly into streamlit_app.py.
+
+This file is kept for reference purposes only.
+DO NOT USE in new code.
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -251,11 +259,11 @@ def format_track_streaming_data(streaming_data, track_id):
     
     # Convert streaming data to cumulative streams if it's not already
     # Check if the values are already cumulative by seeing if they always increase
-    is_cumulative = (df['Value'].diff().dropna() >= 0).all()
+    is_cumulative = (df['CumulativeStreams'].diff().dropna() >= 0).all()
     
     if not is_cumulative:
         # Convert to cumulative by calculating cumulative sum
-        df['Value'] = df['Value'].cumsum()
+        df['CumulativeStreams'] = df['CumulativeStreams'].cumsum()
     
     return df
 

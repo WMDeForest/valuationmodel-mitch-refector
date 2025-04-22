@@ -1,3 +1,11 @@
+"""
+DEPRECATED: This module is no longer in use as of April 2024.
+The ChartMetric functionality has been moved directly into streamlit_app.py.
+
+This file is kept for reference purposes only.
+DO NOT USE in new code.
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np

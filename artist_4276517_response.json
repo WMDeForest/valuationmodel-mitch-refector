@@ -1,0 +1,22 @@
+[
+  {
+    "timestp": "2024-08-12T00:00:00.000Z",
+    "code2": "US",
+    "spotify_artist_id": "0GxIjbHfr6z8hjKOg7HJzu",
+    "lat": 37.1325,
+    "lng": -113.4893,
+    "region": "CITY",
+    "city_id": 11261,
+    "spotify_artist_insights_location": 255,
+    "population": 26405,
+    "city_affinity": 0,
+    "current_max_count": 27155,
+    "market_max_cm_artist_id": 10657795,
+    "market_max_artist_name": "Nino Paid",
+    "max_listeners": 102412,
+    "artist_city_rank": 0,
+    "is_estimate": false,
+    "listeners": 525,
+    "prev_listeners": 502
+  }
+]

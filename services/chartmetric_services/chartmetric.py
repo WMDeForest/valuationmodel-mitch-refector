@@ -180,14 +180,14 @@ class ChartMetricService(IChartmetricSDK):
         if params is None:
             params = {}
         
-        # Ensure limit is set to 50 if not specified
+        # Ensure limit is set to 50 if not specified 
         if 'limit' not in params:
             params['limit'] = 50
             
-        # If no date-related parameters are provided, default to a recent date before Aug 12, 2024
+        # If no date-related parameters are provided, default to a specific date (August 12th, 2024)
         if 'date' not in params and 'since' not in params and 'until' not in params and 'latest' not in params:
-            # Use a date slightly before Aug 12, 2024 to get top 50 cities
-            params['since'] = '2024-08-11'
+            # Use a specific date to get consistent city data
+            params['date'] = '2024-08-12'
         
         response = self._client.request(
             url=CHARTMETRIC_API_ARTIST_WHERE_PEOPLE_LISTEN_URL(artist_id),
@@ -198,26 +198,35 @@ class ChartMetricService(IChartmetricSDK):
         response_json = json.loads(response)
         return response_json
 
-    def __create_artist_track_where_people_listen(self, object: dict) -> list:
+    def __create_artist_track_where_people_listen(self, object: dict) -> dict:
+        """
+        Process the artist geography data from the API, focusing on city data
+        
+        Parameters:
+        -----------
+        object : dict
+            The API response object
+            
+        Returns:
+        --------
+        dict
+            Geography data focusing on cities
+        """
         try:
-            country_listeners = []
-            
-            # Extract countries data
-            if 'countries' in object:
-                countries_data = object['countries']
+            # Extract only city data from the response
+            if 'cities' in object and object['cities']:
+                cities_data = []
+                for city, data_list in object['cities'].items():
+                    for city_data in data_list:
+                        if 'listeners' in city_data and 'code2' in city_data:
+                            # Add the city name to each data point for clarity
+                            city_data['city'] = city
+                            cities_data.append(city_data)
                 
-                # Process each country
-                for country, data_list in countries_data.items():
-                    if data_list and len(data_list) > 0:
-                        # Get the first entry for each country
-                        country_data = data_list[0]
-                        # Extract just code2 and listeners
-                        country_listeners.append({
-                            'code2': country_data.get('code2', country),
-                            'listeners': country_data.get('listeners', 0)
-                        })
-            
-            return country_listeners
+                # Return a list of dictionaries with city data
+                return cities_data
+            else:
+                return []
         except Exception as e:
             # Log the error but don't crash
             print(f"Error processing geography data: {str(e)}")
@@ -236,14 +245,21 @@ class ChartMetricService(IChartmetricSDK):
             
         Returns:
         --------
-        list
-            Simplified list of country data with code2 and listeners
+        list or None
+            City-based geography data or None if an error occurs
         """
         try:
             response = self.__get_artist_track_where_people_listen_request(artist_id, params)
             response_obj = response["obj"]
-            return self.__create_artist_track_where_people_listen(response_obj)
+            result = self.__create_artist_track_where_people_listen(response_obj)
+            
+            # If we got empty results, return None instead
+            if not result or len(result) == 0:
+                print(f"No geography data found for artist ID: {artist_id}")
+                return None
+                
+            return result
         except Exception as e:
-            # Return empty list on error
+            # Return None on error
             print(f"Error in get_artist_track_where_people_listen: {str(e)}")
-            return []
+            return None
